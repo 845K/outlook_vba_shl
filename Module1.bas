@@ -1,6 +1,26 @@
 Attribute VB_Name = "Module1"
 Global tel As Integer
+Public Const mijnFontSize As String = "10pt"
+Public Const mijnFontFamily As String = "verdana"
+Public Const doelenLijst As String = _
+"apeldoorn,bedum,druten,ermelo,julianadorp,monster,noorderbrug,noordwijk,regio zuid,wekerom,zeeland"
 
+
+
+Sub clipboardStempel()
+    Dim oMail As MailItem
+    Dim melder As String
+    Dim verzonden As String
+    
+    Set oMail = GetCurrentItem()
+    melder = grijpMelder(oMail)
+    verzonden = grijpVerzonden(oMail)
+        
+    Clipboard ("BK i.o. " & melder & " mail van " & Format(verzonden, "d mmmm"))
+    
+    Set oMail = Nothing
+
+End Sub
 
 Sub besteMelder()
     Dim oMail As MailItem
@@ -14,11 +34,15 @@ Sub besteMelder()
     melder = grijpMelder(oMail)
         
     myPlainText = "Beste " & melder & ","
-    myHTMLText = "Beste " & blauw(melder) & ","
-    myHTMLText = "<span style=" & Chr(34) & "font-family:verdana;font-size:9pt" & Chr(34) & ">" & myHTMLText & "</span>"
+    ''myHTMLText = "Beste " & blauw(melder) & ","
+    myHTMLText = "Beste " & melder & ","
+    myHTMLText = "<span style=" & Chr(34) & "font-family:" & mijnFontFamily & ";font-size:" & mijnFontSize & Chr(34) & ">" & myHTMLText & "</span>"
     
     '' Als eerste regel al gezet is dan niks doen anders Beste melder neerzetten
     If Mid(oMail.Body, 1, Len(myPlainText)) <> myPlainText Then plakTextInBody myHTMLText, oMail, oInspector
+    
+    Set oMail = Nothing
+    Set oInspector = Nothing
 
 End Sub
 
@@ -32,6 +56,7 @@ Sub aanhefEnFixCC()
 
     fixToCC
     besteMelder
+    '' quick and dirty cursor plaatsen om meteen te typen
     SendKeys "{DOWN}", True
     SendKeys "{Enter}", True
     
@@ -216,15 +241,61 @@ Sub zeven24()
     
     fixToCC
     
+    Set oMail = Nothing
+    
 End Sub
+
+
+Function swapMaand(txt As String) As String
+
+    On Error Resume Next
+    
+    Dim maandKort() As Variant
+    Dim maandLang() As Variant
+    Dim resultaat As Variant
+    
+    txt = LCase(txt)
+    
+    maandKort = Array("jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sept", "okt", "nov", "dec")
+    maandLang = Array("januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december")
+    
+    
+    Dim i As Long
+    ''kijk of er een lange versie gevonden is
+    For i = LBound(maandLang, 1) To UBound(maandLang, 1)
+       If InStr(maandLang(i), txt) > 0 Then
+          swapMaand = maandKort(i)
+          Exit Sub '' klaar is kees
+       End If
+    Next i
+    
+    ''we kijken of er een korte versie gevonden wordt als lange niet gevonden is net
+    For i = LBound(maandKort, 1) To UBound(maandKort, 1)
+       If InStr(maandKort(i), txt) > 0 Then
+          swapMaand = maandLang(i)
+          Exit Sub '' klaar
+       End If
+    Next i
+    
+    
+End Function
+
+
 Function week(txt As String) As String
 
     On Error Resume Next
     
     Dim weekdag() As Variant
-    weekdag = Array("", "zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag")
+    Dim resultaat As Variant
     
-    week = weekdag(Weekday(txt)) & " " & txt
+    weekdag = Array("", "zondag ", "maandag ", "dinsdag ", "woensdag ", "donderdag ", "vrijdag ", "zaterdag ")
+    
+    resultaat = Weekday(txt)
+    If resultaat > 0 And resultaat < 8 Then
+        week = weekdag(resultaat) & txt
+    Else
+        week = txt
+    End If
     
 End Function
 
@@ -245,6 +316,7 @@ Sub InsertText()
     Dim newSubject As String
     Dim myNamespace As Outlook.NameSpace
     Dim zelf() As String
+    Dim doelen() As String
 
  
     '' Pak achter- en voornaam van huidige gebruiker  achternaam = zelf(0)  en  voornaam = zelf(1)
@@ -280,31 +352,35 @@ Sub InsertText()
     Dim clientvolnaam As String
     Dim dat As String
     Dim heenOfterug  As String
-    Dim doelen() As Variant
     Dim dl As Variant
+    Dim ond As String
     dl = "leeg"
-    doelen = Array("apeldoorn", "bedum", "druten", "ermelo", "julianadorp", "monster", "noorderbrug", "noordwijk", "regio zuid", "wekerom", "zeeland")
     
     '' Splits alles door komma gescheiden en stop in array genaamd larry
-    larry() = Split(newMail.Subject, ",")
+    ond = newMail.Subject
+    ond = Replace(ond, "RE: ", "")
+    larry() = Split(ond, ",")
     larryLength = UBound(larry) - LBound(larry)
      
     '' Plak eerste sectie voor de komma in doel
     doel = Trim(LCase(larry(0)))
     '' Kijk of perceelnaam geheel of gedeeltelijk ingevuld is
-    If (IsInArray(doel, doelen)) Then
-        dl = Filter(doelen, doel)
-        doel = dl(0)
-    End If
     If doel = "nw" Then doel = "noordwijk"
     If doel = "nb" Then doel = "noorderbrug"
     If doel = "z" Then doel = "zeeland"
     If doel = "zuid" Then doel = "regio zuid"
+    doelen = Split(doelenLijst, ",")
+    If (UBound(Filter(doelen, doel)) > -1) Then
+        dl = Filter(doelen, doel)
+        doel = dl(0)
+    End If
     doel = mooi(doel)
     
-    '' Plak tweede woord in clientnaam
+    
     If larryLength >= 1 Then
+        '' Plak tweede woord in clientnaam
         clientvolnaam = mooi(Trim(larry(1)))
+        '' Deze woorden hoeven niet met hoofdletter
         clientvolnaam = Replace(clientvolnaam, " En ", " en ")
         clientvolnaam = Replace(clientvolnaam, " Van ", " van ")
         clientvolnaam = Replace(clientvolnaam, " De ", " de ")
@@ -320,27 +396,30 @@ Sub InsertText()
         clientvolnaam = Replace(clientvolnaam, ".", ",")
     End If
     
-    '' Plak derde zin in dat
+    
     If larryLength >= 2 Then
+        '' Plak derde zin in dat
         dat = Trim(larry(2))
+        '' Alvast voor de bodytekst afgekorte datums voluit schrijven
         If dat = "z" Then dat = "ziek"
         If dat = "b" Then dat = "beter"
         dat = Replace(dat, ".", ",")
-        dat = Replace(dat, "mar", "maart")
-        dat = Replace(dat, "mrt", "maart")
-        dat = Replace(dat, "apr", "april")
-        dat = Replace(dat, "juni", "jun")
-        dat = Replace(dat, "jun", "juni")
-        dat = Replace(dat, "juli", "jul")
-        dat = Replace(dat, "jul", "juli")
-        dat = Replace(dat, "aug", "augustus")
-        dat = Replace(dat, "september", "sep")
-        dat = Replace(dat, "sept", "sep")
-        dat = Replace(dat, "sep", "september")
-        dat = Replace(dat, "okt", "oktober")
-        dat = Replace(dat, "nov", "november")
-        dat = Replace(dat, "dec", "december")
+        dat = Replace(dat, "mar ", "maart ")
+        dat = Replace(dat, "mrt ", "maart ")
+        dat = Replace(dat, "apr ", "april ")
+        dat = Replace(dat, "juni ", "jun ")
+        dat = Replace(dat, "jun ", "juni ")
+        dat = Replace(dat, "juli ", "jul ")
+        dat = Replace(dat, "jul ", "juli ")
+        dat = Replace(dat, "aug ", "augustus ")
+        dat = Replace(dat, "september ", "sep ")
+        dat = Replace(dat, "sept ", "sep ")
+        dat = Replace(dat, "sep ", "september ")
+        dat = Replace(dat, "okt ", "oktober ")
+        dat = Replace(dat, "nov ", "november ")
+        dat = Replace(dat, "dec ", "december ")
         
+        '' We zoeken straks zelf de dag op bij de datum dus hier strippen we alle dagaanduidingen
         dat = Replace(dat, "ma ", "")
         dat = Replace(dat, "di ", "")
         dat = Replace(dat, "wo ", "")
@@ -360,7 +439,7 @@ Sub InsertText()
     
     '' Plak vierde sectie in heenOfterug
     If larryLength >= 3 Then
-        heenOfterug = Trim(larry(3))
+        heenOfterug = Trim(LCase(larry(3)))
         If heenOfterug = "heen" Then heenOfterug = "heenrit"
         If heenOfterug = "h" Then heenOfterug = "heenrit"
         If heenOfterug = "terug" Then heenOfterug = "terugrit"
@@ -381,9 +460,10 @@ Sub InsertText()
     '' *********************************************
     aanOfAfmelding = "Afmelding"
     myHTMLText = deAanhef & "<BR><BR><BR>"
-    myHTMLText = Replace(myHTMLText, "[naamMelder]", blauw(melder))
+    ''myHTMLText = Replace(myHTMLText, "[naamMelder]", blauw(melder))
+    myHTMLText = Replace(myHTMLText, "[naamMelder]", melder)
     
-    '' Als we niet genoeg argumenten krijgen dan alle drie de tekstopties printen om door gebruiker zelf te editten
+    '' Als we niet genoeg argumenten krijgen dan alle drie de tekstopties klaarzetten om door gebruiker zelf te editten
     If larryLength <= 1 Then
         
         myHTMLText = myHTMLText & vanTot & "<BR><BR>"
@@ -400,6 +480,7 @@ Sub InsertText()
         myHTMLText = Replace(myHTMLText, "[opDatum]", blauw("opDatum"))
         myHTMLText = Replace(myHTMLText, "[heenTerug]", blauw("heenOfTerug"))
     Else
+        '' We hebben minimaal 3 argumenten
         If (heenOfterug = "heenrit" Or heenOfterug = "terugrit") Then
             dat = week(dat)
             myHTMLText = myHTMLText & heenterug
@@ -436,6 +517,13 @@ Sub InsertText()
                         aanOfAfmelding = "Betermelding"
                     Else
                         dat = week(dat)
+                        If (InStr(dat, " en ")) Then
+                            Dim datt() As String
+                            datt = Split(dat, " en ")
+                            datt(0) = week(datt(0))
+                            datt(1) = week(datt(1))
+                            dat = datt(0) & " en " & datt(1)
+                        End If
                         myHTMLText = myHTMLText & opDatum
                         myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
                         myHTMLText = Replace(myHTMLText, "[opDatum]", blauw(dat))
@@ -445,8 +533,8 @@ Sub InsertText()
         End If
     End If
     
-    myHTMLText = myHTMLText & "<BR><BR>" & nogVragen & "<BR>"
-    myHTMLText = "<span style=" & Chr(34) & "font-family:verdana;font-size:9pt" & Chr(34) & ">" & myHTMLText & "</span>"
+    myHTMLText = myHTMLText & "<BR><BR>" & nogVragen ''& "<BR>"
+    myHTMLText = "<span style=" & Chr(34) & "font-family:" & mijnFontFamily & ";font-size:" & mijnFontSize & Chr(34) & ">" & myHTMLText & "</span>"
     
    
     '' Als we een lijstje hebben dan de hoofdletters weer terugzetten voor de subject
@@ -480,7 +568,6 @@ Sub InsertText()
 
     
     '' Om te controleren of er een komma-gescheiden subject is getypt kijken we naar de clientvolnaam
-    '' MsgBox tel & Chr(13) & clientvolnaam & Chr(13) & "--"
     
     If clientvolnaam = "" Then
     
@@ -528,12 +615,151 @@ Sub InsertText()
         End If
     End If
     
-    '' Reset teller
+    '' Reset global teller
     tel = 0
     
+    '' Alvast stempeltje klaarzetten
+    Call clipboardStempel
     
+    
+    '' Klaar
+    Set newMail = Nothing
+    Set oInspector = Nothing
     
 End Sub
+
+
+
+Sub gokSDRegio()
+
+ Dim tos() As String
+ Dim weZoeken As String
+ Dim weVonden As String
+ Dim doelen() As Variant
+ Dim apeldoorn() As Variant
+ Dim bedum() As Variant
+ Dim druten() As Variant
+ Dim ermelo() As Variant
+ Dim julianadorp() As Variant
+ Dim monster() As Variant
+ Dim noordwijk() As Variant
+ Dim wekerom() As Variant
+ Dim zeeland() As Variant
+ 
+ '' https://stackoverflow.com/questions/8849357/add-quotation-at-the-start-and-end-of-each-line-in-notepad
+ doelen = Array("apeldoorn", "bedum", "druten", "ermelo", "julianadorp", "monster", "noorderbrug", "noordwijk", "regio zuid", "wekerom", "zeeland")
+ apeldoorn = Array("Beekbergen", "Vaassen", "Voorst")
+ bedum = Array("Appingedam", "Delfzijl", "Harlingen", "Leeuwarden", "Zuidwolde")
+ druten = Array("Geldermalsen", "Zaltbommel", "Woudrichem", "Beneden Leeuwen", "Boven Leeuwen", "Grave", "Kerk Avezaath", "Nijmegen", "Nuenen", "Tiel", "Wijchen")
+ ermelo = Array("Almere", "Amersfoort", "Baarn", "Biddinghuizen", "Blaricum", "Bunschoten", "Spakenburg", "De Meern", "Dronten", "Elburg", "Elspeet", "Emmeloord", "Ens", "Epe", "Epe", "t Harde", "Harderwijk", "Hoogland", "Laren", "Leersum", "Lelystad", "Nijkerk", "Nijkerkerveen", "Nunspeet", "Oldebroek", "Oosterwolde", "Soest", "Swifterbant", "Urk", "Utrecht", "Vleuten", "Wezep", "Zeewolde")
+ julianadorp = Array("Alkmaar", "Amsterdam", "Anna Paulowna", "Bovenkarpsel", "Breezand", "Den Burg", "Den Helder", "Driehuis", "Koedijk", "Nieuw Niedorp", "Schagen", "Sint Pancras", "t Zand", "Wieringwerf", "Zwaag")
+ monster = Array("Den Haag", "Gravenzande", "De Lier", "Den Haag", "Poeldijk", "Schipluiden", "Wateringen")
+ noordwijk = Array("Hillegom", "Hoofddorp", "Hoogmade", "Katwijk", "Leiden", "Leiderdorp", "Lisse", "Lisserbroek", "Nieuw Vennep", "Oegstgeest", "Rijnsburg", "Sassenheim", "Voorhout", "Vijfhuizen")
+ wekerom = Array("Arnhem", "Barneveld", "Bennekom", "Ede", "De Glind", "Lunteren", "Renkum", "Veenendaal", "Wageningen")
+ zeeland = Array("Aagtekerke", "Arnemuiden", "Borssele", "Gapinge", "Goes", "Heinkeszand", "Hulst", "Koudekerke", "Meliskerke", "Middelburg", "Nieuw- en Sint Joosland", "Nieuwdorp", "Nisse", "Oostkapelle", "Ritthem", "Serooskerke", "Veere", "Vlissingen")
+ 
+ 
+ Dim newMail    As MailItem
+ Dim oInspector As Inspector
+ 
+ On Error Resume Next
+ 
+     '' Check of mail inline of in eigen window getoond wordt
+    Set oInspector = Application.ActiveInspector
+    If oInspector Is Nothing Then
+        Set newMail = GetCurrentItem()
+    Else
+        Set newMail = oInspector.CurrentItem
+    End If
+    
+ 
+    '' stop alle ontvangers uit To veld in array
+    tos = Split(newMail.To, ";")
+    
+    weZoeken = tos(0)
+    weVonden = GetOutlookAddressBookProperty(weZoeken, "City")
+    Debug.Print (weZoeken)
+    Debug.Print (weVonden)
+    Debug.Print ("--->")
+    
+    If IsInArray(weVonden, doelen) Then
+        Debug.Print ("Joepie")
+    Else
+        If IsInArray(weVonden, apeldoorn) Then weVonden = "Apeldoorn"
+            
+        If IsInArray(weVonden, bedum) Then weVonden = "Bedum"
+        If IsInArray(weVonden, druten) Then weVonden = "Druten"
+        If IsInArray(weVonden, ermelo) Then weVonden = "Ermelo"
+        If IsInArray(weVonden, julianadorp) Then weVonden = "Julianadorp"
+        If IsInArray(weVonden, monster) Then weVonden = "Monster"
+        If IsInArray(weVonden, noordwijk) Then weVonden = "Noordwijk"
+        If IsInArray(weVonden, wekerom) Then weVonden = "Wekerom"
+        If IsInArray(weVonden, zeeland) Then weVonden = "Zeeland"
+    End If
+    
+    Debug.Print (weVonden)
+    
+    
+    
+    SendKeys weVonden, True
+    
+    newMail = Nothing
+    
+ 
+End Sub
+
+Public Function GetOutlookAddressBookProperty(alias As String, propertyName As String) As Variant
+
+ 
+ 
+ '' https://www.dalesandro.net/retrieve-outlook-address-book-data-using-custom-excel-vba-function/
+ 
+ 
+  On Error GoTo errorHandler
+  Dim olApp As Outlook.Application
+  Dim olNameSpace As NameSpace
+  Dim olRecipient As Outlook.Recipient
+  Dim olExchUser As Outlook.ExchangeUser
+  Dim olContact As Outlook.AddressEntry
+  Set olApp = CreateObject("Outlook.Application")
+  Set olNameSpace = olApp.GetNamespace("MAPI")
+  Set olRecipient = olNameSpace.CreateRecipient(LCase(Trim(alias)))
+  olRecipient.Resolve
+  If olRecipient.Resolved Then
+    Set olExchUser = olRecipient.AddressEntry.GetExchangeUser
+    If Not olExchUser Is Nothing Then
+      'Attempt to extract information from Exchange
+      GetOutlookAddressBookProperty = Switch(propertyName = "Job Title", olExchUser.JobTitle, _
+                                             propertyName = "Company Name", olExchUser.CompanyName, _
+                                             propertyName = "Department", olExchUser.Department, _
+                                             propertyName = "Name", olExchUser.Name, _
+                                             propertyName = "First Name", olExchUser.FirstName, _
+                                             propertyName = "City", olExchUser.City, _
+                                             propertyName = "Last Name", olExchUser.LastName)
+    Else
+      'If Exchange not available, then attempt to extract information from local Contacts
+      Set olContact = olRecipient.AddressEntry
+      
+      If Not olContact Is Nothing Then
+        GetOutlookAddressBookProperty = Switch(propertyName = "Job Title", olContact.GetContact.JobTitle, _
+                                               propertyName = "Company Name", olContact.GetContact.CompanyName, _
+                                               propertyName = "Department", olContact.GetContact.Department, _
+                                               propertyName = "Name", olContact.GetContact.FullName, _
+                                               propertyName = "First Name", olContact.GetContact.FirstName, _
+                                               propertyName = "City", olContact.GetContact.BusinessAddressCity, _
+                                               propertyName = "Last Name", olContact.GetContact.LastName)
+      Else
+        GetOutlookAddressBookProperty = CVErr(xlErrNA)
+      End If
+    End If
+  Else
+    GetOutlookAddressBookProperty = CVErr(xlErrNA)
+  End If
+errorHandler:
+  If Err.Number <> 0 Then
+    GetOutlookAddressBookProperty = CVErr(xlErrNA)
+  End If
+End Function
 
 Sub corrigeerToCC(newMail As MailItem)
 
@@ -633,7 +859,7 @@ Function grijpMelder(newMail As MailItem) As String
     '' als het een enkele naam betreft kan straks nog gekeken worden of er een getal in zit of dat
     '' het aantal elementen dus 0 is en daardoor waarschijnlijk geen voornaam is
     melder = melders(melderVoornaam)
-    '' voornaam kan bestaan uit voornaam plus tussenvoegsels
+    '' voornaam kan bestaan uit voornaam plus tussenvoegsels, hier de meest voorkomende tussenvoegsels vervangen door niks
     tussenvoegsels = Array("van het", "van der", "van den", "van de", " aan", " bij", " in", " onder", " van", " den", " ten", " 't", " het", " de")
     For Each voegsel In tussenvoegsels
         melder = Replace(melder, voegsel, "")
@@ -643,37 +869,75 @@ Function grijpMelder(newMail As MailItem) As String
     '' alvast gevonden voornaam optie in variabel zetten
     grijpMelder = melder
      
+     
     '' Kijk of in gevonden meldernaam een getal zit of dat er geen sprake was van een komma-gescheiden meldernaam
     If (senderHadGetal Or melderVoornaam = 0) Then
+        grijpMelder = "melder"
         txt = newMail.Body
         onderwerpPos1 = InStr(1, txt, "Onderwerp: ")
         onderwerpPos2 = InStr(onderwerpPos1 + 10, txt, "Onderwerp: ")
         If onderwerpPos2 = 0 Then onderwerpPos2 = Len(txt)
         
-        txt = LCase(Mid(txt, onderwerpPos1, onderwerpPos2 - onderwerpPos1 + 1))
+        txt = LCase(Mid(txt, onderwerpPos1 + 11, onderwerpPos2 - onderwerpPos1 + 1))
         
-        groetArray = Array("voorbaat dank,", "melder:", "mvgr", "mvrgr", "groet,", "groeten,", "groetjes van", "groetjes,", "groet:", "groeten:", "groetjes:", "groet van", "groet;", "groeten;", "groetjes;", "groetjes", "groeten", "groet", "dank!", "gr.", "mvg", "m.v.g.", "thanks,", "gr ", " gr ")
+        groetArray = Array("voorbaat dank,", "melder:", "mvg,", "mvgr", "mvrgr", "groeten van", "groetjes van", "groetjes,", "groet:", "groeten:", "groetjes:", "groet van", "groet;", "groeten;", "groetjes;", "groetjes", "groeten", "groet", "dank!", "gr.", "mvg", "m.v.g.", "thanks,", "gr ", "gr" & Chr(13), " gr ", "groet,", "groeten,")
         
         For Each groet In groetArray
             groetLen = Len(groet)
             groetenPos = InStr(txt, groet)
-            If groetenPos > 0 Then Exit For
+            If groetenPos > 0 Then
+                gokNaam = Mid(txt, groetenPos + groetLen, 25)
+                
+                gokNaam = Replace(gokNaam, Chr(13), " ")
+                gokNaam = Replace(gokNaam, Chr(10), " ")
+                gokNaam = Replace(gokNaam, Chr(12), " ")
+                gokNaam = smartTrim(gokNaam)
+                gokNaam = Trim(gokNaam)
+                
+                grijpMelder = mooi(gokNaam)
+                Exit For
+            End If
         Next
-        
-        gokNaam = Mid(txt, groetenPos + groetLen, 25)
-        gokNaam = Replace(gokNaam, Chr(13), " ")
-        gokNaam = Replace(gokNaam, Chr(10), " ")
-        gokNaam = Replace(gokNaam, Chr(12), " ")
-        gokNaam = smartTrim(gokNaam)
-        gokNaam = Trim(gokNaam)
-        
-        grijpMelder = mooi(gokNaam)
-        
+          
     End If
     
     '' Soms gaat het toch mis dus even paar fixjes
-    If grijpMelder = "Derwerp:" Or grijpMelder = "Derwerp" Or grijpMelder = "Erwerp" Or grijpMelder = "Van" Or grijpMelder = "" Then grijpMelder = "melder"
+    ''If grijpMelder = "Derwerp:" _
+    Or grijpMelder = "Derwerp" _
+    Or grijpMelder = "Erwerp" _
+    Or grijpMelder = "Van" _
+    Or grijpMelder = "" Then grijpMelder = "melder"
     
+End Function
+
+
+
+Function grijpVerzonden(newMail As MailItem) As String
+
+    Dim txt As String
+    Dim Pos1 As Integer
+    Dim Pos2 As Integer
+    Dim pakDatum As String
+    
+
+    txt = newMail.Body
+    Pos1 = InStr(1, txt, "Verzonden: ") + 11
+    Pos2 = InStr(1, txt, "Aan: ")
+    If Pos2 = 0 Then Pos2 = Pos1 + 25
+           
+    pakDatum = Mid(txt, Pos1, Pos2 - Pos1)
+    
+    pakDatum = Replace(pakDatum, "maandag", "ma")
+    pakDatum = Replace(pakDatum, "dinsdag", "di")
+    pakDatum = Replace(pakDatum, "woensdag", "wo")
+    pakDatum = Replace(pakDatum, "donderdag", "do")
+    pakDatum = Replace(pakDatum, "vrijdag", "vr")
+    pakDatum = Replace(pakDatum, "zaterdag", "za")
+    pakDatum = Replace(pakDatum, "zondag", "zo")
+    pakDatum = Replace(pakDatum, Format(Now(), "yyyy"), "")
+    
+    grijpVerzonden = pakDatum
+
 End Function
 
 
@@ -733,7 +997,17 @@ End Function
 
 Function IsInArray(stringToBeFound As String, arr As Variant) As Boolean
 
-    IsInArray = (UBound(Filter(arr, stringToBeFound)) > -1)
+    ''IsInArray = (UBound(Filter(arr, stringToBeFound)) > -1)
+    
+    
+    Dim i
+    For i = LBound(arr) To UBound(arr)
+        If LCase(arr(i)) = LCase(stringToBeFound) Then
+            IsInArray = True
+            Exit Function
+        End If
+    Next i
+    IsInArray = False
   
 End Function
 
