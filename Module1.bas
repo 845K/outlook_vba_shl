@@ -5,7 +5,23 @@ Public Const mijnFontFamily As String = "verdana"
 Public Const doelenLijst As String = _
 "apeldoorn,bedum,druten,ermelo,julianadorp,monster,noorderbrug,noordwijk,regio zuid,wekerom,zeeland"
 
-
+Function grijpZelf() As String
+ 
+ Dim myNamespace As Outlook.NameSpace
+ Dim naam() As String
+ Dim i As Integer
+ 
+ Set myNamespace = Application.GetNamespace("MAPI")
+ 
+ naam() = Split(myNamespace.CurrentUser, ",")
+ 
+ For i = UBound(naam) To LBound(naam) Step -1
+ 
+    grijpZelf = grijpZelf & Mid(Trim(naam(i)), 1, 1)
+ 
+ Next i
+ 
+End Function
 
 Sub clipboardStempel()
     Dim oMail As MailItem
@@ -16,13 +32,12 @@ Sub clipboardStempel()
     melder = grijpMelder(oMail)
     verzonden = grijpVerzonden(oMail)
         
-    Clipboard ("BK i.o. " & melder & " mail van " & Format(verzonden, "d mmmm"))
+    Clipboard (grijpZelf & " iov " & melder & " mail van " & Format(verzonden, "d mmmm"))
     
     Set oMail = Nothing
 
 End Sub
-
-Sub besteMelder()
+Sub zetBesteMelder(s As Boolean)
     Dim oMail As MailItem
     Dim oInspector As Inspector
     Dim melder As String
@@ -34,16 +49,23 @@ Sub besteMelder()
     melder = grijpMelder(oMail)
         
     myPlainText = "Beste " & melder & ","
-    ''myHTMLText = "Beste " & blauw(melder) & ","
-    myHTMLText = "Beste " & melder & ","
+    If s Then
+        myHTMLText = "Beste " & blauw(melder) & ","
+    Else
+        myHTMLText = "Beste " & melder & ","
+    End If
     myHTMLText = "<span style=" & Chr(34) & "font-family:" & mijnFontFamily & ";font-size:" & mijnFontSize & Chr(34) & ">" & myHTMLText & "</span>"
     
-    '' Als eerste regel al gezet is dan niks doen anders Beste melder neerzetten
+    '' Check of Beste melder al te vinden is anders neerzetten
     If Mid(oMail.Body, 1, Len(myPlainText)) <> myPlainText Then plakTextInBody myHTMLText, oMail, oInspector
     
     Set oMail = Nothing
     Set oInspector = Nothing
+End Sub
+Sub besteMelder()
 
+    Call zetBesteMelder(False)
+    
 End Sub
 
 Sub fixToCC()
@@ -128,7 +150,9 @@ Sub zeven24()
               
             If .stelVraag <> "" Then
                 .antwoord = InputBox(.stelVraag, .vraagTitel, .defaultInput)
-                If StrPtr(.antwoord) = 0 Then Exit Sub
+                If StrPtr(.antwoord) = 0 Then Exit Sub '' Cancel gedrukt
+                .antwoord = Replace(.antwoord, ".00", "")
+                .antwoord = Replace(.antwoord, ".0", "")
                 .vervangMet = Replace(.vervangMet, .zoekWoord, .antwoord)
             End If
             
@@ -201,7 +225,7 @@ Sub zeven24()
 
     oMail.HTMLBody = HTMLBlok
     oMail.Subject = newSubject
-    besteMelder
+    zetBesteMelder True
     
     Dim aa As Long
     Dim bb As Long
@@ -218,7 +242,7 @@ Sub zeven24()
 
     If aa <= Len(zoek) Then
     
-        MsgBox (zoek & " niet gevonden")
+        MsgBox (zoek & " niet gevonden" & Chr(13) & "Hierdoor kan ik de lege ruimte onder de aanhef niet weghalen.")
         
     Else
 
@@ -269,7 +293,7 @@ Function swapMaand(txt As String) As String
        End If
     Next i
     
-    ''we kijken of er een korte versie gevonden wordt als lange niet gevonden is net
+    ''we kijken of er een korte versie gevonden wordt als lange niet gevonden is zojuist
     For i = LBound(maandKort, 1) To UBound(maandKort, 1)
        If InStr(maandKort(i), txt) > 0 Then
           swapMaand = maandLang(i)
@@ -291,11 +315,8 @@ Function week(txt As String) As String
     weekdag = Array("", "zondag ", "maandag ", "dinsdag ", "woensdag ", "donderdag ", "vrijdag ", "zaterdag ")
     
     resultaat = Weekday(txt)
-    If resultaat > 0 And resultaat < 8 Then
-        week = weekdag(resultaat) & txt
-    Else
-        week = txt
-    End If
+    week = txt
+    If resultaat > 0 And resultaat < 8 Then week = weekdag(resultaat) & txt
     
 End Function
 
@@ -314,14 +335,14 @@ Sub InsertText()
     Dim oInspector As Inspector
     Dim mySubject As String
     Dim newSubject As String
-    Dim myNamespace As Outlook.NameSpace
-    Dim zelf() As String
+    ''Dim myNamespace As Outlook.NameSpace
+    ''Dim zelf() As String
     Dim doelen() As String
 
  
     '' Pak achter- en voornaam van huidige gebruiker  achternaam = zelf(0)  en  voornaam = zelf(1)
-    Set myNamespace = Application.GetNamespace("MAPI")
-    zelf = Split(myNamespace.CurrentUser, ",")
+    ''Set myNamespace = Application.GetNamespace("MAPI")
+    ''zelf = Split(myNamespace.CurrentUser, ",")
     
     '' Check of mail inline of in eigen window getoond wordt
     Set oInspector = Application.ActiveInspector
@@ -381,71 +402,56 @@ Sub InsertText()
         '' Plak tweede woord in clientnaam
         clientvolnaam = mooi(Trim(larry(1)))
         '' Deze woorden hoeven niet met hoofdletter
-        clientvolnaam = Replace(clientvolnaam, " En ", " en ")
-        clientvolnaam = Replace(clientvolnaam, " Van ", " van ")
-        clientvolnaam = Replace(clientvolnaam, " De ", " de ")
-        clientvolnaam = Replace(clientvolnaam, " Der ", " der ")
-        clientvolnaam = Replace(clientvolnaam, " Den ", " den ")
-        clientvolnaam = Replace(clientvolnaam, " Op ", " op ")
-        clientvolnaam = Replace(clientvolnaam, "Begeleider", "begeleider")
-        clientvolnaam = Replace(clientvolnaam, "Begeleiding", "begeleiding")
-        clientvolnaam = Replace(clientvolnaam, "Personen", " personen")
-        clientvolnaam = Replace(clientvolnaam, "Genoemde", " genoemde")
-        clientvolnaam = Replace(clientvolnaam, "Onderstaande", "onderstaande")
-        clientvolnaam = Replace(clientvolnaam, "Plus ", "plus ")
+        Dim verkleiners() As Variant
+        verkleiners = Array(" En ", " Van ", " De ", " Der ", " Den ", " Op ", "Begeleider", "Begeleiding", "Personen", "Genoemde", "Onderstaande", "Plus ")
+        For Each woord In verkleiners
+            clientvolnaam = Replace(clientvolnaam, woord, LCase(woord))
+        Next
+        '' Om toch een lijstje namen met komma te kunnen scheiden gebruiken we gewoon de punt
         clientvolnaam = Replace(clientvolnaam, ".", ",")
     End If
     
     
     If larryLength >= 2 Then
         '' Plak derde zin in dat
-        dat = Trim(larry(2))
-        '' Alvast voor de bodytekst afgekorte datums voluit schrijven
-        If dat = "z" Then dat = "ziek"
-        If dat = "b" Then dat = "beter"
+        dat = LCase(Trim(larry(2))) & " "
+        '' ziek- en betermelding opvangen met korte notatie z en b
+        If dat = "z " Then dat = "ziek"
+        If dat = "b " Then dat = "beter"
         dat = Replace(dat, ".", ",")
+        '' Alvast voor de bodytekst afgekorte datums voluit schrijven
         dat = Replace(dat, "mar ", "maart ")
         dat = Replace(dat, "mrt ", "maart ")
         dat = Replace(dat, "apr ", "april ")
-        dat = Replace(dat, "juni ", "jun ")
         dat = Replace(dat, "jun ", "juni ")
-        dat = Replace(dat, "juli ", "jul ")
         dat = Replace(dat, "jul ", "juli ")
         dat = Replace(dat, "aug ", "augustus ")
-        dat = Replace(dat, "september ", "sep ")
         dat = Replace(dat, "sept ", "sep ")
         dat = Replace(dat, "sep ", "september ")
         dat = Replace(dat, "okt ", "oktober ")
+        dat = Replace(dat, "oct ", "oktober ")
         dat = Replace(dat, "nov ", "november ")
         dat = Replace(dat, "dec ", "december ")
         
         '' We zoeken straks zelf de dag op bij de datum dus hier strippen we alle dagaanduidingen
-        dat = Replace(dat, "ma ", "")
-        dat = Replace(dat, "di ", "")
-        dat = Replace(dat, "wo ", "")
-        dat = Replace(dat, "do ", "")
-        dat = Replace(dat, "vr ", "")
-        dat = Replace(dat, "za ", "")
-        dat = Replace(dat, "zo ", "")
-        dat = Replace(dat, "maandag ", "")
-        dat = Replace(dat, "dinsdag ", "")
-        dat = Replace(dat, "woensdag ", "")
-        dat = Replace(dat, "donderdag ", "")
-        dat = Replace(dat, "vrijdag ", "")
-        dat = Replace(dat, "zaterdag ", "")
-        dat = Replace(dat, "zondag ", "")
+        Dim weekdagen() As Variant
+        weekdagen = Array("ma ", "di ", "wo ", "do ", "vr ", "za ", "zo ", "maandag ", "dinsdag ", "woensdag ", "donderdag ", "vrijdag ", "zaterdag ", "zondag ")
+        For Each weekdag In weekdagen
+            clientvolnaam = Replace(clientvolnaam, weekdag, "")
+        Next
+        dat = Trim(dat)
     End If
     
     
     '' Plak vierde sectie in heenOfterug
     If larryLength >= 3 Then
         heenOfterug = Trim(LCase(larry(3)))
-        If heenOfterug = "heen" Then heenOfterug = "heenrit"
-        If heenOfterug = "h" Then heenOfterug = "heenrit"
-        If heenOfterug = "terug" Then heenOfterug = "terugrit"
-        If heenOfterug = "t" Then heenOfterug = "terugrit"
-        If heenOfterug = "retour" Then heenOfterug = "terugrit"
-        If heenOfterug = "r" Then heenOfterug = "terugrit"
+        If heenOfterug = "heen" _
+        Or heenOfterug = "h" Then heenOfterug = "heenrit"
+        If heenOfterug = "terug" _
+        Or heenOfterug = "t" _
+        Or heenOfterug = "retour" _
+        Or heenOfterug = "r" Then heenOfterug = "terugrit"
     End If
     
 
@@ -492,9 +498,9 @@ Sub InsertText()
             If (InStr(dat, "t/m")) Then
                 Dim dats() As String
                 dats = Split(dat, "t/m")
-                dats(0) = week(dats(0))
-                dats(1) = week(dats(1))
-                dat = dats(0) & " t/m " & dats(1)
+                dats(0) = week(Trim(dats(0)))
+                dats(1) = week(Trim(dats(1)))
+                dat = dats(0) & " t/m " & dats(1) '' alvast klaarzetten voor subject straks
                 myHTMLText = myHTMLText & vanTot
                 myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
                 myHTMLText = Replace(myHTMLText, "[vanDatum]", blauw(dats(0)))
@@ -522,7 +528,7 @@ Sub InsertText()
                             datt = Split(dat, " en ")
                             datt(0) = week(datt(0))
                             datt(1) = week(datt(1))
-                            dat = datt(0) & " en " & datt(1)
+                            dat = datt(0) & " en " & datt(1) '' alvast klaarzetten voor subject straks
                         End If
                         myHTMLText = myHTMLText & opDatum
                         myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
@@ -579,12 +585,16 @@ Sub InsertText()
             SendKeys "{Enter}", True
             tel = tel + 1
             Call InsertText
+            Set newMail = Nothing
+            Set oInspector = Nothing
             Exit Sub
         End If
     End If
     
     If door = vbCancel Then
         tel = 0
+        Set newMail = Nothing
+        Set oInspector = Nothing
         Exit Sub
     End If
     
@@ -610,6 +620,8 @@ Sub InsertText()
             SendKeys "{Enter}", True
             tel = tel + 1
             Call InsertText
+            Set newMail = Nothing
+            Set oInspector = Nothing
             Exit Sub
             
         End If
@@ -983,13 +995,13 @@ Function gevondenAantal(txt As String, vind As String) As Integer
 
     Dim plek As Integer
     plek = InStr(txt, vind)
-
     While plek > 0
-    
         gevondenAantal = gevondenAantal + 1
         plek = InStr(plek + Len(vind), txt, vind)
-
     Wend
+    
+    '' Vond deze geniale oplossing op stackoverflow
+    ''gevondenAantal = Len(txt) - Len(Replace(txt, vind, ""))
 
 End Function
 
