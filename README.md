@@ -12,6 +12,7 @@ Some VBA code to help quickly setup a reply email
 - Replace relevant sections of text with elements needed and taken from the subject line
 
 - Add day of the week to found dates
-
+- Check if dates are likely meant for coming year and adjust weekday accordingly
+- 
 - Put a string in the clipboard that holds the date and time the original email was sent, to paste into other app as comment
 
