@@ -37,6 +37,7 @@ Sub clipboardStempel()
     Set oMail = Nothing
 
 End Sub
+
 Sub zetBesteMelder(s As Boolean)
     Dim oMail As MailItem
     Dim oInspector As Inspector
@@ -323,27 +324,30 @@ End Function
 Sub InsertText()
     
     '' init
-    Dim myHTMLText As String
-    Dim deAanhef As String
-    Dim vanTot As String
-    Dim opDatum As String
-    Dim heenterug As String
-    Dim ziekGemeld As String
-    Dim beterGemeld As String
-    Dim nogVragen As String
-    Dim newMail    As MailItem
-    Dim oInspector As Inspector
-    Dim mySubject As String
-    Dim newSubject As String
-    ''Dim myNamespace As Outlook.NameSpace
-    ''Dim zelf() As String
-    Dim doelen() As String
+    Dim myHTMLText     As String
+    Dim deAanhef       As String
+    Dim vanTot         As String
+    Dim opDatum        As String
+    Dim heenTerug      As String
+    Dim ziekGemeld     As String
+    Dim beterGemeld    As String
+    Dim nogVragen      As String
+    Dim newMail        As Outlook.MailItem
+    Dim oInspector     As Outlook.Inspector
+    Dim mySubject      As String
+    Dim newSubject     As String
+    Dim doelen()       As String
+    Dim aanOfAfmelding As String
+    Dim larry()        As String
+    Dim larryLength    As Integer
+    Dim doel           As String
+    Dim clientvolnaam  As String
+    Dim dat            As String
+    Dim heenOfterug    As String
+    Dim dl             As Variant
+    Dim ond            As String
 
- 
-    '' Pak achter- en voornaam van huidige gebruiker  achternaam = zelf(0)  en  voornaam = zelf(1)
-    ''Set myNamespace = Application.GetNamespace("MAPI")
-    ''zelf = Split(myNamespace.CurrentUser, ",")
-    
+     
     '' Check of mail inline of in eigen window getoond wordt
     Set oInspector = Application.ActiveInspector
     If oInspector Is Nothing Then
@@ -357,7 +361,7 @@ Sub InsertText()
     deAanhef = "Beste [naamMelder],"
     vanTot = "Het vervoer (heen en retour) van  [naamClient]  is van  [vanDatum]  tot en met  [totDatum]  geannuleerd."
     opDatum = "Het vervoer (heen en retour) van  [naamClient]  is op  [opDatum]  geannuleerd."
-    heenterug = "De [heenTerug]  van  [naamClient]  is voor  [opDatum]  geannuleerd."
+    heenTerug = "De [heenTerug]  van  [naamClient]  is voor  [opDatum]  geannuleerd."
     nogVragen = "Mocht u nog vragen hebben, neem dan gerust contact met ons op."
     ziekGemeld = "Het vervoer (heen en retour) van  [naamClient]  is [per] afgemeld tot nader order."
     beterGemeld = "Het vervoer (heen en retour) van  [naamClient]  is [per] weer aangemeld."
@@ -366,20 +370,14 @@ Sub InsertText()
     '' *******************************************
     '' ** Subject veld uitpluizen en mooi maken **
     '' *******************************************
-    Dim aanOfAfmelding As String
-    Dim larry() As String
-    Dim larryLength As Integer
-    Dim doel As String
-    Dim clientvolnaam As String
-    Dim dat As String
-    Dim heenOfterug  As String
-    Dim dl As Variant
-    Dim ond As String
+    
     dl = "leeg"
     
-    '' Splits alles door komma gescheiden en stop in array genaamd larry
+    '' De RE: mag eraf
     ond = newMail.Subject
     ond = Replace(ond, "RE: ", "")
+    
+    '' Splits alles door komma gescheiden en stop in array genaamd larry
     larry() = Split(ond, ",")
     larryLength = UBound(larry) - LBound(larry)
      
@@ -401,13 +399,15 @@ Sub InsertText()
     If larryLength >= 1 Then
         '' Plak tweede woord in clientnaam
         clientvolnaam = mooi(Trim(larry(1)))
+        
         '' Deze woorden hoeven niet met hoofdletter
         Dim verkleiners() As Variant
         verkleiners = Array(" En ", " Van ", " De ", " Der ", " Den ", " Op ", "Begeleider", "Begeleiding", "Personen", "Genoemde", "Onderstaande", "Plus ")
         For Each woord In verkleiners
             clientvolnaam = Replace(clientvolnaam, woord, LCase(woord))
         Next
-        '' Om toch een lijstje namen met komma te kunnen scheiden gebruiken we gewoon de punt
+        
+        '' Om ook een lijstje namen met komma te kunnen scheiden gebruiken we gewoon de punt
         clientvolnaam = Replace(clientvolnaam, ".", ",")
     End If
     
@@ -415,11 +415,17 @@ Sub InsertText()
     If larryLength >= 2 Then
         '' Plak derde zin in dat
         dat = LCase(Trim(larry(2))) & " "
+        
         '' ziek- en betermelding opvangen met korte notatie z en b
         If dat = "z " Then dat = "ziek"
         If dat = "b " Then dat = "beter"
+        
+        '' datums met komma scheiden kan als je de punt gebruikt maar weekdagen worden dan niet toegevoegd
         dat = Replace(dat, ".", ",")
+        
         '' Alvast voor de bodytekst afgekorte datums voluit schrijven
+        dat = Replace(dat, "jan ", "januari ")
+        dat = Replace(dat, "feb ", "februari ")
         dat = Replace(dat, "mar ", "maart ")
         dat = Replace(dat, "mrt ", "maart ")
         dat = Replace(dat, "apr ", "april ")
@@ -439,11 +445,13 @@ Sub InsertText()
         For Each weekdag In weekdagen
             clientvolnaam = Replace(clientvolnaam, weekdag, "")
         Next
+        
+        '' Trim
         dat = Trim(dat)
     End If
     
     
-    '' Plak vierde sectie in heenOfterug
+    '' Plak eventuele vierde sectie in heenOfterug
     If larryLength >= 3 Then
         heenOfterug = Trim(LCase(larry(3)))
         If heenOfterug = "heen" _
@@ -474,7 +482,7 @@ Sub InsertText()
         
         myHTMLText = myHTMLText & vanTot & "<BR><BR>"
         myHTMLText = myHTMLText & opDatum & "<BR><BR>"
-        myHTMLText = myHTMLText & heenterug & "<BR>"
+        myHTMLText = myHTMLText & heenTerug & "<BR>"
         
         If larryLength = 1 Then
             myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
@@ -489,18 +497,33 @@ Sub InsertText()
         '' We hebben minimaal 3 argumenten
         If (heenOfterug = "heenrit" Or heenOfterug = "terugrit") Then
             dat = week(dat)
-            myHTMLText = myHTMLText & heenterug
+            myHTMLText = myHTMLText & heenTerug
             myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
             myHTMLText = Replace(myHTMLText, "[heenTerug]", blauw(heenOfterug))
             myHTMLText = Replace(myHTMLText, "[opDatum]", blauw(dat))
         Else
             dat = Replace(dat, " tm ", " t/m ")
+            dat = Replace(dat, " tot en met ", " t/m ")
+            dat = Replace(dat, " t.e.m. ", " t/m ")
+            dat = Replace(dat, " t.e.m ", " t/m ")
+            dat = Replace(dat, " tem ", " t/m ")
             If (InStr(dat, "t/m")) Then
                 Dim dats() As String
                 dats = Split(dat, "t/m")
+                
+                '' kijk of eerste datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt
+                If CDate(Now()) > CDate(dats(0)) Then dats(0) = dats(0) & " " & Year(Now) + 1
+                '' kijk of tweede datum voor de eerste ligt dan wordt aangenomen dat volgend jaar bedoeld wordt
+                If CDate(dats(0)) > CDate(dats(1)) Then dats(1) = dats(1) & " " & Year(Now) + 1
+                '' Nu de weekdag erbij zoeken
                 dats(0) = week(Trim(dats(0)))
                 dats(1) = week(Trim(dats(1)))
+                '' eventuele jaartal mag er weer af
+                dats(0) = Replace(dats(0), Year(Now) + 1, "")
+                dats(1) = Replace(dats(1), Year(Now) + 1, "")
+                
                 dat = dats(0) & " t/m " & dats(1) '' alvast klaarzetten voor subject straks
+                MsgBox "'" & dat & "'"
                 myHTMLText = myHTMLText & vanTot
                 myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
                 myHTMLText = Replace(myHTMLText, "[vanDatum]", blauw(dats(0)))
@@ -548,6 +571,8 @@ Sub InsertText()
     clientvolnaam = Replace(clientvolnaam, " onderstaande ", " Onderstaande ")
     
     '' We korten de hele boel weer af voor het subject
+    dat = Replace(dat, "januari", "jan")
+    dat = Replace(dat, "februari", "feb")
     dat = Replace(dat, "maart", "mrt")
     dat = Replace(dat, "april", "apr")
     ''dat = Replace(dat, "juni", "jun")
@@ -569,66 +594,80 @@ Sub InsertText()
     '' Gegevens verwerkt, controleer met gebruiker en vraag of we door mogen gaan
     mySubject = newMail.Subject
     newSubject = doel & " - " & clientvolnaam & " - " & aanOfAfmelding & " " & dat & " " & heenOfterug
-    Dim door As Integer
-    door = vbYes
-
     
-    '' Om te controleren of er een komma-gescheiden subject is getypt kijken we naar de clientvolnaam
     
-    If clientvolnaam = "" Then
+        Dim door As Integer
+        door = vbYes
     
-        If tel > 0 Then
-            door = MsgBox("Doorgaan met standaard antwoord opties?", vbQuestion + vbYesNoCancel)
-            If door = vbYes Then newSubject = mySubject
-        Else
-            '' Omdat het goed mogelijk is dat er nog geen Enter is gegeven in het subjectveld doen we het eerst even zelf
-            SendKeys "{Enter}", True
-            tel = tel + 1
-            Call InsertText
+        ''
+        '' Om te controleren of er een komma-gescheiden subject is getypt kijken we hier naar de clientvolnaam
+        '' Een lege clientvolnaam betekent dat er helemaal geen komma's zijn gebruikt in het subject
+        ''
+        If clientvolnaam = "" Then
+        
+            If tel > 0 Then
+                door = MsgBox("Doorgaan met de standaardzinnen?", vbQuestion + vbYesNoCancel)
+                If door = vbYes Then newSubject = mySubject '' Subject mag zometeen blijven staan zoals hij was
+            Else
+                '' Omdat het goed mogelijk is dat er nog geen Enter is gegeven in het subjectveld doen we het eerst even zelf
+                SendKeys "{Enter}", True
+                '' Nu gaan we deze routine nog 1 keer runnen dus houden we een global teller bij
+                tel = tel + 1
+                Call InsertText
+                '' Verder kunnen we deze instantie opruimen en afsluiten
+                Set newMail = Nothing
+                Set oInspector = Nothing
+                Exit Sub
+            End If
+        End If
+        
+        '' Als op Cancel wordt gedrukt dan doen we helemaal niks meer
+        If door = vbCancel Then
+            tel = 0
             Set newMail = Nothing
             Set oInspector = Nothing
             Exit Sub
         End If
-    End If
-    
-    If door = vbCancel Then
-        tel = 0
-        Set newMail = Nothing
-        Set oInspector = Nothing
-        Exit Sub
-    End If
-    
-    If door = vbYes Then
-    
-        '' Geef onderwerpveld nieuwe subject
-        newMail.Subject = newSubject
-    
-        '' Check op welke manier de reply is opengezet en probeer de nieuwe body text erin te proppen
-        plakTextInBody myHTMLText, newMail, oInspector
-    
-        '' Corrigeer To en CC velden en verwijder onszelf
-        corrigeerToCC newMail
-       
-        '' Wij zijn nu eenmaal feilloos dus we verzenden ook maar meteen de mail
-        '' newMail.Send
-    End If
-    
-    If door = vbNo Then
-        If tel <= 1 Then
+        
+        
+        If door = vbNo Then
+            If tel <= 1 Then
+                    
+                '' Omdat het goed mogelijk is dat er nog geen Enter is gegeven in het subjectveld doen we het eerst even zelf
+                SendKeys "{Enter}", True
+                '' Nu gaan we deze routine nog 1 keer runnen dus houden we een global teller bij
+                tel = tel + 1
+                '' Verder kunnen we deze instantie opruimen en afsluiten
+                Call InsertText
+                Set newMail = Nothing
+                Set oInspector = Nothing
+                Exit Sub
                 
-            '' Omdat het goed mogelijk is dat er nog geen Enter is gegeven in het subjectveld doen we het eerst even zelf
-            SendKeys "{Enter}", True
-            tel = tel + 1
-            Call InsertText
-            Set newMail = Nothing
-            Set oInspector = Nothing
-            Exit Sub
-            
+            End If
         End If
-    End If
+        
+        
+        If door = vbYes Then
+        
+            '' Geef onderwerpveld nieuwe subject
+            newMail.Subject = newSubject
+        
+            '' Check op welke manier de reply is opengezet en probeer de nieuwe body text erin te proppen
+            plakTextInBody myHTMLText, newMail, oInspector
+        
+            '' Corrigeer To en CC velden en verwijder onszelf
+            corrigeerToCC newMail
+           
+            '' Wij zijn nu eenmaal feilloos dus we verzenden ook maar meteen de mail
+            '' newMail.Send
+        End If
+
+        
+        '' Reset global teller
+        tel = 0
     
-    '' Reset global teller
-    tel = 0
+    
+    
     
     '' Alvast stempeltje klaarzetten
     Call clipboardStempel
