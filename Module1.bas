@@ -523,7 +523,7 @@ Sub InsertText()
                 dats(1) = Replace(dats(1), Year(Now) + 1, "")
                 
                 dat = dats(0) & " t/m " & dats(1) '' alvast klaarzetten voor subject straks
-                MsgBox "'" & dat & "'"
+
                 myHTMLText = myHTMLText & vanTot
                 myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
                 myHTMLText = Replace(myHTMLText, "[vanDatum]", blauw(dats(0)))
