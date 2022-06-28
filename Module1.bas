@@ -383,6 +383,7 @@ Sub InsertText()
      
     '' Plak eerste sectie voor de komma in doel
     doel = Trim(LCase(larry(0)))
+    
     '' Kijk of perceelnaam geheel of gedeeltelijk ingevuld is
     If doel = "nw" Then doel = "noordwijk"
     If doel = "nb" Then doel = "noorderbrug"
@@ -401,9 +402,9 @@ Sub InsertText()
         clientvolnaam = mooi(Trim(larry(1)))
         
         '' Deze woorden hoeven niet met hoofdletter
-        Dim verkleiners() As Variant
-        verkleiners = Array(" En ", " Van ", " De ", " Der ", " Den ", " Op ", "Begeleider", "Begeleiding", "Personen", "Genoemde", "Onderstaande", "Plus ")
-        For Each woord In verkleiners
+        Dim verkleinLijst() As Variant
+        verkleinLijst = Array(" En ", " Van ", " De ", " Der ", " Den ", " Op ", "Begeleider", "Begeleiding", "Personen", "Genoemde", "Onderstaande", "Plus ")
+        For Each woord In verkleinLijst
             clientvolnaam = Replace(clientvolnaam, woord, LCase(woord))
         Next
         
@@ -441,7 +442,7 @@ Sub InsertText()
         
         '' We zoeken straks zelf de dag op bij de datum dus hier strippen we alle dagaanduidingen
         Dim weekdagen() As Variant
-        weekdagen = Array("ma ", "di ", "wo ", "do ", "vr ", "za ", "zo ", "maandag ", "dinsdag ", "woensdag ", "donderdag ", "vrijdag ", "zaterdag ", "zondag ")
+        weekdagen = Array("maa ", "din ", "woe ", "don ", "vrij ", "zat ", "zon ", "ma ", "di ", "wo ", "do ", "vr ", "za ", "zo ", "maandag ", "dinsdag ", "woensdag ", "donderdag ", "vrijdag ", "zaterdag ", "zondag ")
         For Each weekdag In weekdagen
             clientvolnaam = Replace(clientvolnaam, weekdag, "")
         Next
@@ -484,9 +485,7 @@ Sub InsertText()
         myHTMLText = myHTMLText & opDatum & "<BR><BR>"
         myHTMLText = myHTMLText & heenTerug & "<BR>"
         
-        If larryLength = 1 Then
-            myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
-        End If
+        If larryLength = 1 Then myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
         
         myHTMLText = Replace(myHTMLText, "[naamClient]", blauw("naamClient"))
         myHTMLText = Replace(myHTMLText, "[vanDatum]", blauw("vanDatum"))
@@ -496,7 +495,10 @@ Sub InsertText()
     Else
         '' We hebben minimaal 3 argumenten
         If (heenOfterug = "heenrit" Or heenOfterug = "terugrit") Then
+            '' kijk of datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt
+            If CDate(Now()) > CDate(dat) Then dat = dat & " " & Year(Now) + 1
             dat = week(dat)
+            dat = Trim(Replace(dat, Year(Now) + 1, ""))
             myHTMLText = myHTMLText & heenTerug
             myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
             myHTMLText = Replace(myHTMLText, "[heenTerug]", blauw(heenOfterug))
@@ -522,7 +524,7 @@ Sub InsertText()
                 dats(0) = Replace(dats(0), Year(Now) + 1, "")
                 dats(1) = Replace(dats(1), Year(Now) + 1, "")
                 
-                dat = dats(0) & " t/m " & dats(1) '' alvast klaarzetten voor subject straks
+                dat = dats(0) & " t/m " & dats(1)
 
                 myHTMLText = myHTMLText & vanTot
                 myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
@@ -531,7 +533,10 @@ Sub InsertText()
             Else
                 If Mid(dat, 1, 4) = "ziek" Then
                     dat = Trim(Replace(dat, "ziek", ""))
+                    '' kijk of datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt
+                    If CDate(Now()) > CDate(dat) Then dat = dat & " " & Year(Now) + 1
                     dat = week(dat)
+                    dat = Trim(Replace(dat, Year(Now) + 1, ""))
                     myHTMLText = myHTMLText & ziekGemeld
                     myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
                     myHTMLText = Replace(myHTMLText, "[per]", blauw(dat))
@@ -539,7 +544,10 @@ Sub InsertText()
                 Else
                     If Mid(dat, 1, 5) = "beter" Then
                         dat = Trim(Replace(dat, "beter", ""))
+                        '' kijk of datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt
+                        If CDate(Now()) > CDate(dat) Then dat = dat & " " & Year(Now) + 1
                         dat = week(dat)
+                        dat = Trim(Replace(dat, Year(Now) + 1, ""))
                         myHTMLText = myHTMLText & beterGemeld
                         myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
                         myHTMLText = Replace(myHTMLText, "[per]", blauw(dat))
@@ -549,9 +557,19 @@ Sub InsertText()
                         If (InStr(dat, " en ")) Then
                             Dim datt() As String
                             datt = Split(dat, " en ")
-                            datt(0) = week(datt(0))
-                            datt(1) = week(datt(1))
-                            dat = datt(0) & " en " & datt(1) '' alvast klaarzetten voor subject straks
+                            
+                            '' kijk of eerste datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt
+                            If CDate(Now()) > CDate(datt(0)) Then datt(0) = datt(0) & " " & Year(Now) + 1
+                            '' kijk of tweede datum voor de eerste ligt dan wordt aangenomen dat volgend jaar bedoeld wordt
+                            If CDate(datt(0)) > CDate(datt(1)) Then datt(1) = datt(1) & " " & Year(Now) + 1
+                            '' Nu de weekdag erbij zoeken
+                            datt(0) = week(Trim(datt(0)))
+                            datt(1) = week(Trim(datt(1)))
+                            '' eventuele jaartal mag er weer af
+                            datt(0) = Replace(datt(0), Year(Now) + 1, "")
+                            datt(1) = Replace(datt(1), Year(Now) + 1, "")
+                                                        
+                            dat = datt(0) & " en " & datt(1)
                         End If
                         myHTMLText = myHTMLText & opDatum
                         myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
@@ -606,7 +624,7 @@ Sub InsertText()
         If clientvolnaam = "" Then
         
             If tel > 0 Then
-                door = MsgBox("Doorgaan met de standaardzinnen?", vbQuestion + vbYesNoCancel)
+                door = MsgBox("Doorgaan met de standaardzinnen?", vbQuestion + vbYesNo)
                 If door = vbYes Then newSubject = mySubject '' Subject mag zometeen blijven staan zoals hij was
             Else
                 '' Omdat het goed mogelijk is dat er nog geen Enter is gegeven in het subjectveld doen we het eerst even zelf
@@ -619,34 +637,18 @@ Sub InsertText()
                 Set oInspector = Nothing
                 Exit Sub
             End If
+            
         End If
         
         '' Als op Cancel wordt gedrukt dan doen we helemaal niks meer
-        If door = vbCancel Then
+        If door = vbNo Then
             tel = 0
             Set newMail = Nothing
             Set oInspector = Nothing
             Exit Sub
         End If
         
-        
-        If door = vbNo Then
-            If tel <= 1 Then
-                    
-                '' Omdat het goed mogelijk is dat er nog geen Enter is gegeven in het subjectveld doen we het eerst even zelf
-                SendKeys "{Enter}", True
-                '' Nu gaan we deze routine nog 1 keer runnen dus houden we een global teller bij
-                tel = tel + 1
-                '' Verder kunnen we deze instantie opruimen en afsluiten
-                Call InsertText
-                Set newMail = Nothing
-                Set oInspector = Nothing
-                Exit Sub
                 
-            End If
-        End If
-        
-        
         If door = vbYes Then
         
             '' Geef onderwerpveld nieuwe subject
@@ -663,19 +665,17 @@ Sub InsertText()
         End If
 
         
-        '' Reset global teller
-        tel = 0
-    
-    
-    
-    
-    '' Alvast stempeltje klaarzetten
-    Call clipboardStempel
-    
-    
+    '' Reset global teller
+    tel = 0
+
     '' Klaar
     Set newMail = Nothing
     Set oInspector = Nothing
+
+
+    '' Alvast stempeltje klaarzetten
+    Call clipboardStempel
+        
     
 End Sub
 
