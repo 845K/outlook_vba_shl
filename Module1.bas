@@ -5,40 +5,51 @@ Public Const mijnFontFamily As String = "verdana"
 Public Const doelenLijst As String = _
 "apeldoorn,bedum,druten,ermelo,julianadorp,monster,noorderbrug,noordwijk,regio zuid,wekerom,zeeland"
 
-Function grijpZelf() As String
- 
- Dim myNamespace As Outlook.NameSpace
- Dim naam() As String
- Dim i As Integer
- 
- Set myNamespace = Application.GetNamespace("MAPI")
- 
- naam() = Split(myNamespace.CurrentUser, ",")
- 
- For i = UBound(naam) To LBound(naam) Step -1
- 
-    grijpZelf = grijpZelf & Mid(Trim(naam(i)), 1, 1)
- 
- Next i
+Function grijpEigenInitialen() As String
+    ''''
+    '''' Maakt initialen van eigen naam
+    ''''
+    Dim myNamespace As Outlook.NameSpace
+    Dim naam() As String
+    Dim i As Integer
+    
+    Set myNamespace = Application.GetNamespace("MAPI")
+    
+    naam() = Split(myNamespace.CurrentUser, ",")
+    
+    For i = UBound(naam) To LBound(naam) Step -1
+    
+       grijpEigenInitialen = grijpEigenInitialen & Mid(Trim(naam(i)), 1, 1)
+    
+    Next i
  
 End Function
 
 Sub clipboardStempel()
+    ''''
+    '''' Zet in paste geheugen wie en door welke mail de vervoerswijziging is gedaan
+    ''''
     Dim oMail As MailItem
     Dim melder As String
     Dim verzonden As String
+    
+    On Error Resume Next
     
     Set oMail = GetCurrentItem()
     melder = grijpMelder(oMail)
     verzonden = grijpVerzonden(oMail)
         
-    Clipboard (grijpZelf & " iov " & melder & " mail van " & Format(verzonden, "d mmmm"))
+    Clipboard (grijpEigenInitialen & " iov " & melder & " mail van " & Format(verzonden, "d mmmm"))
     
     Set oMail = Nothing
 
 End Sub
 
 Sub zetBesteMelder(s As Boolean)
+    ''''
+    '''' Stop bovenin body de aanhef 'Beste melder,'
+    '''' Boolean switch s om wel of geen blauwe meldernaam neer te zetten
+    ''''
     Dim oMail As MailItem
     Dim oInspector As Inspector
     Dim melder As String
@@ -50,32 +61,47 @@ Sub zetBesteMelder(s As Boolean)
     melder = grijpMelder(oMail)
         
     myPlainText = "Beste " & melder & ","
-    If s Then
-        myHTMLText = "Beste " & blauw(melder) & ","
-    Else
-        myHTMLText = "Beste " & melder & ","
-    End If
+    
+    If s Then melder = blauw(melder)
+    
+    myHTMLText = "Beste " & melder & ","
+    
     myHTMLText = "<span style=" & Chr(34) & "font-family:" & mijnFontFamily & ";font-size:" & mijnFontSize & Chr(34) & ">" & myHTMLText & "</span>"
     
-    '' Check of Beste melder al te vinden is anders neerzetten
+    '' Check of Beste melder al te vinden is op eerste regel, anders neerzetten
     If Mid(oMail.Body, 1, Len(myPlainText)) <> myPlainText Then plakTextInBody myHTMLText, oMail, oInspector
     
     Set oMail = Nothing
     Set oInspector = Nothing
 End Sub
 Sub besteMelder()
+    ''''
+    '''' Stop bovenin body de aanhef 'Beste melder,'
+    '''' Boolean switch om geen blauwe meldernaam neer te zetten
+    ''''
 
     Call zetBesteMelder(False)
     
 End Sub
 
 Sub fixToCC()
+    ''''
+    '''' Loop 'To' veld door en verhuis alle geaddresseerden behalve originele zender naar 'CC' veld
+    '''' Ook eigen email verwijderen uit 'To' veld
+    ''''
     
     Call corrigeerToCC(GetCurrentItem())
 
 End Sub
 
 Sub aanhefEnFixCC()
+    ''''
+    '''' Loop 'To' veld door en verhuis alle geaddresseerden behalve originele zender naar 'CC' veld
+    '''' Ook eigen email verwijderen uit 'To' veld
+    ''''
+    '''' Stop bovenin body de aanhef 'Beste melder,'
+    '''' Boolean switch om geen blauwe meldernaam neer te zetten
+    ''''
 
     fixToCC
     besteMelder
@@ -88,6 +114,44 @@ End Sub
 
 
 Sub zeven24()
+    ''''
+    '''' Vraagt gebruiker om input en vervangt binnen body tekst de betreffende woorden met die input
+    '''' Zoekt in body naar string binnen 'startcode' en 'eindcode'
+    '''' Kan ook het onderwerpveld aanpassen
+    ''''
+    '''' Syntax code:
+    ''''           [[  zoekwoord , vervangMet , stelVraag , vraagTitel , defaultInput  ]]
+    ''''
+    '''' zoekwoord      Zoekt naar dit woord binnen body
+    '''' vervangMet     Vervangt zoekwoord met dit woord, mag combinatie van tekst en opgegeven zoekwoord zijn
+    '''' stelVraag      Opent tekst input window met deze string als vraag
+    '''' vraagTitel     Het geopende window kun je hiermee ook een titel geven in de titelbalk
+    '''' defaultInput   Hiermee kun je eventueel een standaardwaarde alvast in de inputbalk zetten
+    ''''
+    '''' Voor het onderwerpveld is een speciaal zoekwoord beschikbaar: 'subject'
+    '''' Hierin is het tweede argument (vervangMet) ook de andere zoekwoord resultaten in te verwerken
+    ''''
+    '''' Plaats het onderstaande op de eerste regels voor de sjabloontekst in de handtekening
+    '''' Voorbeeld:
+    ''''
+    ''''     [[planOnNummer, planOnNummer - subject, PlanOn nummer :, Zoef zoef]]
+    ''''     [[24uOf7dagen, 24uOf7dagen, 24 uur of 7 dagen?, Sjongejonge, 7 dagen]]
+    ''''     [[subject, Melding planOnNummer - subject]]
+    ''''
+    '''' Resultaat:
+    ''''
+    ''''  Toont eerste een dialoogvenster met de vraag 'Planon nummer :' en titel 'Zoef zoef'
+    ''''  De inputbox is leeg
+    ''''
+    ''''  Toont daarna nog een dialoogvenster met de vraag '24 uur of 7 dagen?' en titel 'Sjongejonge'
+    ''''  In de inputbox is alvast '7 dagen' ingevuld en geselecteerd zodat je meteen kan typen en het de standaardwaarde vervangt
+    ''''
+    ''''  Als laatste gaat hij zonder vraag te stellen het subject vervangen door wat de tekst:
+    ''''  'Melding ' plus wat je bij de eerste vraag hebt geantwoord, dan een streepje en dan de originele onderwerpregel
+    ''''  (Zal automatisch elk woord met hoofdletter plaatsen voor de mooiheid)
+    ''''
+
+    
 
     Dim oMail As MailItem
     Set oMail = GetCurrentItem()
@@ -163,6 +227,7 @@ Sub zeven24()
         End With
     Wend
     cnt = cnt - 1
+    '' Als er geen code gevonden is dan stilletjes eindigen
     If cnt < 0 Then Exit Sub
     
     eersteRegelNaCode = Trim(Mid(oMail.Body, element(cnt).eindPos + Len(eindCode), 50))
@@ -243,7 +308,7 @@ Sub zeven24()
 
     If aa <= Len(zoek) Then
     
-        MsgBox (zoek & " niet gevonden" & Chr(13) & "Hierdoor kan ik de lege ruimte onder de aanhef niet weghalen.")
+        MsgBox (zoek & " niet gevonden" & Chr(13) & "Hierdoor kan ik de ontstane lege ruimte onder de aanhef niet weghalen.")
         
     Else
 
@@ -271,42 +336,14 @@ Sub zeven24()
 End Sub
 
 
-Function swapMaand(txt As String) As String
-
-    On Error Resume Next
-    
-    Dim maandKort() As Variant
-    Dim maandLang() As Variant
-    Dim resultaat As Variant
-    
-    txt = LCase(txt)
-    
-    maandKort = Array("jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sept", "okt", "nov", "dec")
-    maandLang = Array("januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december")
-    
-    
-    Dim i As Long
-    ''kijk of er een lange versie gevonden is
-    For i = LBound(maandLang, 1) To UBound(maandLang, 1)
-       If InStr(maandLang(i), txt) > 0 Then
-          swapMaand = maandKort(i)
-          Exit Sub '' klaar is kees
-       End If
-    Next i
-    
-    ''we kijken of er een korte versie gevonden wordt als lange niet gevonden is zojuist
-    For i = LBound(maandKort, 1) To UBound(maandKort, 1)
-       If InStr(maandKort(i), txt) > 0 Then
-          swapMaand = maandLang(i)
-          Exit Sub '' klaar
-       End If
-    Next i
-    
-    
-End Function
 
 
-Function week(txt As String) As String
+
+Function week(dat As String) As String
+    ''''
+    '''' Zoekt bij de opgegeven datum de naam van de dag op
+    '''' Geeft anders zichzelf ongewijzigd weer terug
+    ''''
 
     On Error Resume Next
     
@@ -315,13 +352,53 @@ Function week(txt As String) As String
     
     weekdag = Array("", "zondag ", "maandag ", "dinsdag ", "woensdag ", "donderdag ", "vrijdag ", "zaterdag ")
     
-    resultaat = Weekday(txt)
-    week = txt
-    If resultaat > 0 And resultaat < 8 Then week = weekdag(resultaat) & txt
+    resultaat = Weekday(dat)
+    week = dat
+    If resultaat > 0 And resultaat < 8 Then week = weekdag(resultaat) & dat
     
 End Function
 
 Sub InsertText()
+    ''''
+    '''' Schiet AfmeldingVervoer af
+    ''''
+
+    Dim newmail        As Outlook.MailItem
+    Dim oInspector     As Outlook.Inspector
+
+    '' Check of mail inline of in eigen window getoond wordt
+    Set oInspector = Application.ActiveInspector
+    If oInspector Is Nothing Then
+        Set newmail = GetCurrentItem()
+    Else
+        Set newmail = oInspector.CurrentItem
+    End If
+    
+    Call AfmeldingVervoer(newmail, oInspector, newmail.Subject)
+
+End Sub
+
+
+Sub test()
+
+    Dim newmail        As Outlook.MailItem
+    Dim oInspector     As Outlook.Inspector
+
+    '' Check of mail inline of in eigen window getoond wordt
+    Set oInspector = Application.ActiveInspector
+    If oInspector Is Nothing Then
+        Set newmail = GetCurrentItem()
+    Else
+        Set newmail = oInspector.CurrentItem
+    End If
+    
+    For Each ond In Array("nb,Bas kerkhof,23 dec tm 12 jan", "nb,bas kerkhgof,23 dec en 12 jan")
+        Call AfmeldingVervoer(newmail, oInspector, ond)
+    Next
+    
+End Sub
+
+Sub AfmeldingVervoer(newmail As Outlook.MailItem, oInspector As Outlook.Inspector, onderwerp As String)
     
     '' init
     Dim myHTMLText     As String
@@ -332,39 +409,35 @@ Sub InsertText()
     Dim ziekGemeld     As String
     Dim beterGemeld    As String
     Dim nogVragen      As String
-    Dim newMail        As Outlook.MailItem
-    Dim oInspector     As Outlook.Inspector
     Dim mySubject      As String
     Dim newSubject     As String
-    Dim doelen()       As String
     Dim aanOfAfmelding As String
     Dim larry()        As String
     Dim larryLength    As Integer
     Dim doel           As String
+    Dim doelen()       As String
     Dim clientvolnaam  As String
     Dim dat            As String
     Dim heenOfterug    As String
     Dim dl             As Variant
-    Dim ond            As String
+    Dim melder         As String
 
      
-    '' Check of mail inline of in eigen window getoond wordt
-    Set oInspector = Application.ActiveInspector
-    If oInspector Is Nothing Then
-        Set newMail = GetCurrentItem()
-    Else
-        Set newMail = oInspector.CurrentItem
-    End If
     
-    
-    '' text declaraties
+    '''' text declaraties
+    ''''
     deAanhef = "Beste [naamMelder],"
+    '' vanTot triggert als 't/m' wordt gezien in datums
     vanTot = "Het vervoer (heen en retour) van  [naamClient]  is van  [vanDatum]  tot en met  [totDatum]  geannuleerd."
+    '' opDatum triggert als er geen 't/m' of ' en ' in datum gezien wordt
     opDatum = "Het vervoer (heen en retour) van  [naamClient]  is op  [opDatum]  geannuleerd."
+    '' heenTerug triggert wanneer er een extra komma met heenrit of terugrit gezien wordt
     heenTerug = "De [heenTerug]  van  [naamClient]  is voor  [opDatum]  geannuleerd."
-    nogVragen = "Mocht u nog vragen hebben, neem dan gerust contact met ons op."
+    '' ziekGemeld triggert als er 'ziek' wordt gezien in datum
     ziekGemeld = "Het vervoer (heen en retour) van  [naamClient]  is [per] afgemeld tot nader order."
+    '' beterGemeld triggert als er 'beter' wordt gezien in datum
     beterGemeld = "Het vervoer (heen en retour) van  [naamClient]  is [per] weer aangemeld."
+    nogVragen = "Mocht u nog vragen hebben, neem dan gerust contact met ons op."
     
     
     '' *******************************************
@@ -372,13 +445,10 @@ Sub InsertText()
     '' *******************************************
     
     dl = "leeg"
-    
+        
+    '' Splits onderwerp string door komma gescheiden en stop in array genaamd larry
     '' De RE: mag eraf
-    ond = newMail.Subject
-    ond = Replace(ond, "RE: ", "")
-    
-    '' Splits alles door komma gescheiden en stop in array genaamd larry
-    larry() = Split(ond, ",")
+    larry() = Split(Replace(onderwerp, "RE: ", ""), ",")
     larryLength = UBound(larry) - LBound(larry)
      
     '' Plak eerste sectie voor de komma in doel
@@ -417,12 +487,18 @@ Sub InsertText()
         '' Plak derde zin in dat
         dat = LCase(Trim(larry(2))) & " "
         
-        '' ziek- en betermelding opvangen met korte notatie z en b
-        If dat = "z " Then dat = "ziek"
-        If dat = "b " Then dat = "beter"
-        
         '' datums met komma scheiden kan als je de punt gebruikt maar weekdagen worden dan niet toegevoegd
         dat = Replace(dat, ".", ",")
+        
+        '' We zoeken straks zelf de dag op bij de datum dus hier strippen we alle dagaanduidingen
+        Dim weekdagen() As Variant
+        weekdagen = Array( _
+        "maa ", "din ", "woe ", "don ", "vrij ", "zat ", "zon ", _
+        "ma ", "di ", "wo ", "do ", "vr ", "za ", "zo ", _
+        "maandag ", "dinsdag ", "woensdag ", "donderdag ", "vrijdag ", "zaterdag ", "zondag ")
+        For Each weekdag In weekdagen
+            dat = Replace(dat, weekdag, "")
+        Next
         
         '' Alvast voor de bodytekst afgekorte datums voluit schrijven
         dat = Replace(dat, "jan ", "januari ")
@@ -440,13 +516,10 @@ Sub InsertText()
         dat = Replace(dat, "nov ", "november ")
         dat = Replace(dat, "dec ", "december ")
         
-        '' We zoeken straks zelf de dag op bij de datum dus hier strippen we alle dagaanduidingen
-        Dim weekdagen() As Variant
-        weekdagen = Array("maa ", "din ", "woe ", "don ", "vrij ", "zat ", "zon ", "ma ", "di ", "wo ", "do ", "vr ", "za ", "zo ", "maandag ", "dinsdag ", "woensdag ", "donderdag ", "vrijdag ", "zaterdag ", "zondag ")
-        For Each weekdag In weekdagen
-            clientvolnaam = Replace(clientvolnaam, weekdag, "")
-        Next
-        
+        '' ziek- en betermelding opvangen met korte notatie z en b
+        If dat = "z " Then dat = "ziek"
+        If dat = "b " Then dat = "beter"
+ 
         '' Trim
         dat = Trim(dat)
     End If
@@ -466,8 +539,7 @@ Sub InsertText()
 
 
     '' Melder pakken voor aanhef
-    Dim melder As String
-    melder = grijpMelder(newMail)
+    melder = grijpMelder(newmail)
    
     
     '' *********************************************
@@ -495,8 +567,10 @@ Sub InsertText()
     Else
         '' We hebben minimaal 3 argumenten
         If (heenOfterug = "heenrit" Or heenOfterug = "terugrit") Then
+            On Error Resume Next
             '' kijk of datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt
             If CDate(Now()) > CDate(dat) Then dat = dat & " " & Year(Now) + 1
+            On Error GoTo 0
             dat = week(dat)
             dat = Trim(Replace(dat, Year(Now) + 1, ""))
             myHTMLText = myHTMLText & heenTerug
@@ -512,11 +586,12 @@ Sub InsertText()
             If (InStr(dat, "t/m")) Then
                 Dim dats() As String
                 dats = Split(dat, "t/m")
-                
+                On Error Resume Next
                 '' kijk of eerste datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt
                 If CDate(Now()) > CDate(dats(0)) Then dats(0) = dats(0) & " " & Year(Now) + 1
                 '' kijk of tweede datum voor de eerste ligt dan wordt aangenomen dat volgend jaar bedoeld wordt
                 If CDate(dats(0)) > CDate(dats(1)) Then dats(1) = dats(1) & " " & Year(Now) + 1
+                On Error GoTo 0
                 '' Nu de weekdag erbij zoeken
                 dats(0) = week(Trim(dats(0)))
                 dats(1) = week(Trim(dats(1)))
@@ -533,8 +608,10 @@ Sub InsertText()
             Else
                 If Mid(dat, 1, 4) = "ziek" Then
                     dat = Trim(Replace(dat, "ziek", ""))
+                    On Error Resume Next
                     '' kijk of datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt
                     If CDate(Now()) > CDate(dat) Then dat = dat & " " & Year(Now) + 1
+                    On Error GoTo 0
                     dat = week(dat)
                     dat = Trim(Replace(dat, Year(Now) + 1, ""))
                     myHTMLText = myHTMLText & ziekGemeld
@@ -544,8 +621,10 @@ Sub InsertText()
                 Else
                     If Mid(dat, 1, 5) = "beter" Then
                         dat = Trim(Replace(dat, "beter", ""))
+                        On Error Resume Next
                         '' kijk of datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt
                         If CDate(Now()) > CDate(dat) Then dat = dat & " " & Year(Now) + 1
+                        On Error GoTo 0
                         dat = week(dat)
                         dat = Trim(Replace(dat, Year(Now) + 1, ""))
                         myHTMLText = myHTMLText & beterGemeld
@@ -557,11 +636,12 @@ Sub InsertText()
                         If (InStr(dat, " en ")) Then
                             Dim datt() As String
                             datt = Split(dat, " en ")
-                            
+                            On Error Resume Next
                             '' kijk of eerste datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt
                             If CDate(Now()) > CDate(datt(0)) Then datt(0) = datt(0) & " " & Year(Now) + 1
                             '' kijk of tweede datum voor de eerste ligt dan wordt aangenomen dat volgend jaar bedoeld wordt
                             If CDate(datt(0)) > CDate(datt(1)) Then datt(1) = datt(1) & " " & Year(Now) + 1
+                            On Error GoTo 0
                             '' Nu de weekdag erbij zoeken
                             datt(0) = week(Trim(datt(0)))
                             datt(1) = week(Trim(datt(1)))
@@ -584,7 +664,7 @@ Sub InsertText()
     myHTMLText = "<span style=" & Chr(34) & "font-family:" & mijnFontFamily & ";font-size:" & mijnFontSize & Chr(34) & ">" & myHTMLText & "</span>"
     
    
-    '' Als we een lijstje hebben dan de hoofdletters weer terugzetten voor de subject
+    '' Als we een lijstje namen hebben dan deze hoofdletters weer terugzetten in het subject
     clientvolnaam = Replace(clientvolnaam, " genoemde ", " Genoemde ")
     clientvolnaam = Replace(clientvolnaam, " onderstaande ", " Onderstaande ")
     
@@ -610,7 +690,8 @@ Sub InsertText()
     dat = Replace(dat, "zondag", "zo")
     
     '' Gegevens verwerkt, controleer met gebruiker en vraag of we door mogen gaan
-    mySubject = newMail.Subject
+    mySubject = newmail.Subject
+    
     newSubject = doel & " - " & clientvolnaam & " - " & aanOfAfmelding & " " & dat & " " & heenOfterug
     
     
@@ -633,7 +714,7 @@ Sub InsertText()
                 tel = tel + 1
                 Call InsertText
                 '' Verder kunnen we deze instantie opruimen en afsluiten
-                Set newMail = Nothing
+                Set newmail = Nothing
                 Set oInspector = Nothing
                 Exit Sub
             End If
@@ -643,7 +724,7 @@ Sub InsertText()
         '' Als op Cancel wordt gedrukt dan doen we helemaal niks meer
         If door = vbNo Then
             tel = 0
-            Set newMail = Nothing
+            Set newmail = Nothing
             Set oInspector = Nothing
             Exit Sub
         End If
@@ -652,13 +733,13 @@ Sub InsertText()
         If door = vbYes Then
         
             '' Geef onderwerpveld nieuwe subject
-            newMail.Subject = newSubject
+            newmail.Subject = newSubject
         
             '' Check op welke manier de reply is opengezet en probeer de nieuwe body text erin te proppen
-            plakTextInBody myHTMLText, newMail, oInspector
+            plakTextInBody myHTMLText, newmail, oInspector
         
             '' Corrigeer To en CC velden en verwijder onszelf
-            corrigeerToCC newMail
+            corrigeerToCC newmail
            
             '' Wij zijn nu eenmaal feilloos dus we verzenden ook maar meteen de mail
             '' newMail.Send
@@ -669,7 +750,7 @@ Sub InsertText()
     tel = 0
 
     '' Klaar
-    Set newMail = Nothing
+    Set newmail = Nothing
     Set oInspector = Nothing
 
 
@@ -710,7 +791,7 @@ Sub gokSDRegio()
  zeeland = Array("Aagtekerke", "Arnemuiden", "Borssele", "Gapinge", "Goes", "Heinkeszand", "Hulst", "Koudekerke", "Meliskerke", "Middelburg", "Nieuw- en Sint Joosland", "Nieuwdorp", "Nisse", "Oostkapelle", "Ritthem", "Serooskerke", "Veere", "Vlissingen")
  
  
- Dim newMail    As MailItem
+ Dim newmail    As MailItem
  Dim oInspector As Inspector
  
  On Error Resume Next
@@ -718,14 +799,14 @@ Sub gokSDRegio()
      '' Check of mail inline of in eigen window getoond wordt
     Set oInspector = Application.ActiveInspector
     If oInspector Is Nothing Then
-        Set newMail = GetCurrentItem()
+        Set newmail = GetCurrentItem()
     Else
-        Set newMail = oInspector.CurrentItem
+        Set newmail = oInspector.CurrentItem
     End If
     
  
     '' stop alle ontvangers uit To veld in array
-    tos = Split(newMail.To, ";")
+    tos = Split(newmail.To, ";")
     
     weZoeken = tos(0)
     weVonden = GetOutlookAddressBookProperty(weZoeken, "City")
@@ -754,7 +835,7 @@ Sub gokSDRegio()
     
     SendKeys weVonden, True
     
-    newMail = Nothing
+    newmail = Nothing
     
  
 End Sub
@@ -812,7 +893,7 @@ errorHandler:
   End If
 End Function
 
-Sub corrigeerToCC(newMail As MailItem)
+Sub corrigeerToCC(newmail As MailItem)
 
 Dim zelf As String
 Dim tos() As String
@@ -820,35 +901,35 @@ Dim tos() As String
     On Error Resume Next
     
     '' Stop eigen naam (Facilitair) in zelf
-    zelf = newMail.Sender.Name
+    zelf = newmail.Sender.Name
     
     '' stop alle ontvangers uit To veld in array
-    tos = Split(newMail.To, ";")
+    tos = Split(newmail.To, ";")
         
     '' Loop alle ontvangers door en kijk of het de eerste melder is en anders naar CC schoppen
-    For Each Recipient In newMail.Recipients
+    For Each Recipient In newmail.Recipients
       If Recipient.Name <> tos(0) Then Recipient.Type = olCC
     Next Recipient
     
     '' Loop ze nog allemaal eens door en verwijder de ontvanger als we het zelf zijn (lukt niet om in 1 loop te doen blijkbaar)
-    For Each Recipient In newMail.Recipients
+    For Each Recipient In newmail.Recipients
       If Recipient.Name = zelf Then Recipient.Delete
     Next Recipient
     
     '' Even netjes alles checken
-    newMail.Recipients.ResolveAll
+    newmail.Recipients.ResolveAll
 
 End Sub
 
-Sub plakTextInBody(myHTMLText As String, newMail As MailItem, oInspector As Inspector)
+Sub plakTextInBody(myHTMLText As String, newmail As MailItem, oInspector As Inspector)
     '' Check op welke manier de reply is opengezet en probeer de nieuwe body text erin te proppen
     If oInspector Is Nothing Then
 
-        Select Case newMail.BodyFormat
+        Select Case newmail.BodyFormat
             Case olFormatPlain, olFormatRichText, olFormatUnspecified
-                newMail.Body = RemoveHTML(myHTMLText) & newMail.Body
+                newmail.Body = RemoveHTML(myHTMLText) & newmail.Body
             Case olFormatHTML
-                newMail.HTMLBody = myHTMLText & newMail.HTMLBody
+                newmail.HTMLBody = myHTMLText & newmail.HTMLBody
         End Select
 
     Else
@@ -869,17 +950,17 @@ Sub plakTextInBody(myHTMLText As String, newMail As MailItem, oInspector As Insp
         
         MsgBox "Dit is experimenteel. Beter is gewoon niet een los window openen om deze macro te gebruiken"
             ' No object model to work with. Must manipulate raw text.
-            Select Case newMail.BodyFormat
+            Select Case newmail.BodyFormat
                 Case olFormatPlain, olFormatRichText, olFormatUnspecified
-                    newMail.Body = newMail.Body & RemoveHTML(myHTMLText)
+                    newmail.Body = newmail.Body & RemoveHTML(myHTMLText)
                 Case olFormatHTML
-                    newMail.HTMLBody = newMail.HTMLBody & "<p>" & myHTMLText & "</p>"
+                    newmail.HTMLBody = newmail.HTMLBody & "<p>" & myHTMLText & "</p>"
             End Select
         End If
     End If
 End Sub
 
-Function grijpMelder(newMail As MailItem) As String
+Function grijpMelder(newmail As MailItem) As String
 
     Dim txt As String
     Dim onderwerpPos1 As String
@@ -897,7 +978,7 @@ Function grijpMelder(newMail As MailItem) As String
     
    
     '' alle ontvangers uitsplitsen
-    melders = Split(newMail.To, ";")
+    melders = Split(newmail.To, ";")
     '' eerste ontvanger selecteren uit rij
     melder = melders(0)
     '' als er ergens een getal voorkomt is het waarschijnlijk een adres en niet een persoonsnaam
@@ -924,7 +1005,7 @@ Function grijpMelder(newMail As MailItem) As String
     '' Kijk of in gevonden meldernaam een getal zit of dat er geen sprake was van een komma-gescheiden meldernaam
     If (senderHadGetal Or melderVoornaam = 0) Then
         grijpMelder = "melder"
-        txt = newMail.Body
+        txt = newmail.Body
         onderwerpPos1 = InStr(1, txt, "Onderwerp: ")
         onderwerpPos2 = InStr(onderwerpPos1 + 10, txt, "Onderwerp: ")
         If onderwerpPos2 = 0 Then onderwerpPos2 = Len(txt)
@@ -963,7 +1044,7 @@ End Function
 
 
 
-Function grijpVerzonden(newMail As MailItem) As String
+Function grijpVerzonden(newmail As MailItem) As String
 
     Dim txt As String
     Dim Pos1 As Integer
@@ -971,7 +1052,7 @@ Function grijpVerzonden(newMail As MailItem) As String
     Dim pakDatum As String
     
 
-    txt = newMail.Body
+    txt = newmail.Body
     Pos1 = InStr(1, txt, "Verzonden: ") + 11
     Pos2 = InStr(1, txt, "Aan: ")
     If Pos2 = 0 Then Pos2 = Pos1 + 25
