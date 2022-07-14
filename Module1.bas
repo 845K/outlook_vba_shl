@@ -559,9 +559,8 @@ Sub AfmeldingVervoer(newmail As Outlook.MailItem, oInspector As Outlook.Inspecto
     dl = "leeg"
         
     '' Splits onderwerp string door komma gescheiden en stop in array genaamd larry
-    '' Als het een reply is en er al - gebruikt is als scheidingsteken dan vangen we die ook even af
     '' De RE: mag er ook af
-    onderwerp = Replace(onderwerp, " - ", ",")
+    
     larry() = Split(Replace(onderwerp, "RE: ", ""), ",")
     larryLength = UBound(larry) - LBound(larry)
      
@@ -589,7 +588,7 @@ Sub AfmeldingVervoer(newmail As Outlook.MailItem, oInspector As Outlook.Inspecto
         
         '' Deze woorden hoeven niet met hoofdletter
         Dim verkleinLijst() As Variant
-        verkleinLijst = Array(" En ", " Van ", " De ", " Der ", " Den ", " Op ", "Begeleider", "Begeleiding", "Personen", "Genoemde", "Onderstaande", "Plus ")
+        verkleinLijst = Array(" En ", " Van ", " De ", " Der ", " Den ", " Op ", " Te ", "Begeleider", "Begeleiding", "Personen", "Genoemde", "Onderstaande", "Plus ")
         For Each woord In verkleinLijst
             clientvolnaam = Replace(clientvolnaam, woord, LCase(woord))
         Next
@@ -775,29 +774,37 @@ Sub AfmeldingVervoer(newmail As Outlook.MailItem, oInspector As Outlook.Inspecto
                             datt = Split(dat, " en ")
                             '' Een getal zonder maand wordt aangezien als dag in huidige maand
                             On Error Resume Next
-                            If Year(CDate(datt(0))) = "1900" Or Year(CDate(datt(0))) = "1899" Then datt(0) = datt(0) & " " & maandNaam(Month(Now()))
-                            If Year(CDate(datt(1))) = "1900" Or Year(CDate(datt(1))) = "1899" Then datt(1) = datt(1) & " " & maandNaam(Month(Now()))
+                            For i = 0 To UBound(datt)
+                                If Year(CDate(datt(i))) = "1900" Or Year(CDate(datt(i))) = "1899" Then datt(i) = datt(i) & " " & maandNaam(Month(Now()))
+                            Next i
                             '' kijk of eerste datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
                             If Not jaarGenoemd(datt(0)) _
                             And CDate(Format(Now, "d-m-yyyy")) > CDate(datt(0)) Then datt(0) = datt(0) & " " & Year(Now) + 1
                             '' kijk of tweede datum voor de eerste ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
-                            If Not jaarGenoemd(datt(1)) _
-                            And CDate(datt(0)) > CDate(datt(1)) Then datt(1) = datt(1) & " " & Year(Now) + 1
+                            For i = 1 To UBound(datt)
+                                If Not jaarGenoemd(datt(i)) _
+                                And CDate(datt(i - 1)) > CDate(datt(i)) Then datt(i) = datt(i) & " " & Year(Now) + 1
+                            Next i
                             On Error GoTo 0
                             
                             '' Nu de weekdag erbij zoeken
-                            datt(0) = week(Trim(datt(0)))
-                            datt(1) = week(Trim(datt(1)))
-                            
                             '' eventuele jaartal mag er weer af
-                            datt(0) = Replace(datt(0), " " & Year(Now) - 1, "")
-                            datt(1) = Replace(datt(1), " " & Year(Now) - 1, "")
-                            datt(0) = Replace(datt(0), " " & Year(Now), "")
-                            datt(1) = Replace(datt(1), " " & Year(Now), "")
-                            datt(0) = Replace(datt(0), " " & Year(Now) + 1, "")
-                            datt(1) = Replace(datt(1), " " & Year(Now) + 1, "")
-                                                        
-                            dat = datt(0) & zwart(" en ") & datt(1)
+                            For i = 0 To UBound(datt)
+                                datt(i) = week(Trim(datt(i)))
+                                datt(i) = Replace(datt(i), " " & Year(Now) - 1, "")
+                                datt(i) = Replace(datt(i), " " & Year(Now), "")
+                                datt(i) = Replace(datt(i), " " & Year(Now) + 1, "")
+                            Next i
+                            
+                            '' Lijstje datums netjes klaarmaken
+                            dat = datt(0)
+                            For i = 1 To UBound(datt)
+                                If i = UBound(datt) Then
+                                    dat = dat & zwart(" en ") & datt(i)
+                                Else
+                                    dat = dat & zwart(", ") & datt(i)
+                                End If
+                            Next i
                         Else
                         
                             '' Een getal zonder maand wordt aangezien als dag in huidige maand
@@ -904,7 +911,7 @@ Sub AfmeldingVervoer(newmail As Outlook.MailItem, oInspector As Outlook.Inspecto
 
 
     '' Alvast stempeltje klaarzetten
-    Call clipboardStempel
+    ''Call clipboardStempel
         
     
 End Sub
@@ -1123,12 +1130,10 @@ Function grijpMelder(newmail As MailItem) As String
     Dim melder As String
     Dim melders() As String
     Dim melderVoornaam As Integer
-    Dim groetArray() As Variant
-    Dim tussenvoegsel() As Variant
-    Dim voegsel As Variant
     Dim senderHadGetal As Boolean
     
-   
+    '' eerst alles resolven
+    newmail.Recipients.ResolveAll
     '' alle ontvangers uitsplitsen
     melders = Split(newmail.To, ";")
     '' eerste ontvanger selecteren uit rij
@@ -1144,8 +1149,7 @@ Function grijpMelder(newmail As MailItem) As String
     '' het aantal elementen dus 0 is en daardoor waarschijnlijk geen voornaam is
     melder = melders(melderVoornaam)
     '' voornaam kan bestaan uit voornaam plus tussenvoegsels, hier de meest voorkomende tussenvoegsels vervangen door niks
-    tussenvoegsels = Array("van het", "van der", "van den", "van de", " aan", " bij", " in", " onder", " van", " den", " ten", " 't", " het", " de")
-    For Each voegsel In tussenvoegsels
+    For Each voegsel In Array("van het", "van der", "van den", "van de", " aan", " bij", " in", " onder", " van", " den", " ten", " 't", " het", " de")
         melder = Replace(melder, voegsel, "")
     Next
     '' eventuele spaties eraf trimmen
@@ -1153,6 +1157,10 @@ Function grijpMelder(newmail As MailItem) As String
     '' alvast gevonden voornaam optie in variabel zetten
     grijpMelder = melder
      
+    '' Hier een aantal ontdekte woorden die als voornaam worden aangezien maar niet kloppen
+    For Each miswoord In Array("Groep", "De", "Het", "'t")
+        If grijpMelder = miswoord Then melderVoornaam = 0
+    Next
      
     '' Kijk of in gevonden meldernaam een getal zit of dat er geen sprake was van een komma-gescheiden meldernaam
     If (senderHadGetal Or melderVoornaam = 0) Then
@@ -1163,10 +1171,8 @@ Function grijpMelder(newmail As MailItem) As String
         If onderwerpPos2 = 0 Then onderwerpPos2 = Len(txt)
         
         txt = LCase(Mid(txt, onderwerpPos1 + 11, onderwerpPos2 - onderwerpPos1 + 1))
-        
-        groetArray = Array("voorbaat dank,", "melder:", "mvg,", "mvgr", "mvrgr", "groeten van", "groetjes van", "groetjes,", "groet:", "groeten:", "groetjes:", "groet van", "groet;", "groeten;", "groetjes;", "groetjes", "groeten", "groet", "dank!", "gr.", "mvg", "m.v.g.", "thanks,", "gr ", "gr" & Chr(13), " gr ", "groet,", "groeten,")
-        
-        For Each groet In groetArray
+             
+        For Each groet In Array("voorbaat dank,", "melder:", "mvg,", "mvgr", "mvrgr", "groeten van", "groetjes van", "groetjes,", "groet:", "groeten:", "groetjes:", "groet van", "groet;", "groeten;", "groetjes;", "groetjes", "groeten", "groet", "dank!", "gr.", "mvg", "m.v.g.", "thanks,", "gr ", "gr" & Chr(13), " gr ", "groet,", "groeten,")
             groetLen = Len(groet)
             groetenPos = InStr(txt, groet)
             If groetenPos > 0 Then
@@ -1185,6 +1191,7 @@ Function grijpMelder(newmail As MailItem) As String
           
     End If
     
+    If grijpMelder = "De" Then grijpMelder = "melder"
     
 End Function
 
