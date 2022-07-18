@@ -558,13 +558,16 @@ Sub AfmeldingVervoer(newmail As Outlook.MailItem, oInspector As Outlook.Inspecto
     
     dl = "leeg"
         
-    '' Splits onderwerp string door komma gescheiden en stop in array genaamd larry
+    '' Splits onderwerp string door slash / gescheiden en stop in array genaamd larry
     '' De RE: mag er ook af
-    
-    larry() = Split(Replace(onderwerp, "RE: ", ""), ",")
+    onderwerp = Replace(onderwerp, "RE: ", "")
+    onderwerp = Replace(onderwerp, " t/m ", " tm ")
+    larry() = Split(onderwerp, "/")
     larryLength = UBound(larry) - LBound(larry)
      
-     
+    
+    '' Als onderwerp leeg is krijgen we errors dus afbreken
+    If Trim(onderwerp) = "" Or Trim(onderwerp) = "RE:" Then Exit Sub
      
     '' Plak eerste sectie voor de komma in doel
     doel = Trim(LCase(larry(0)))
@@ -599,11 +602,11 @@ Sub AfmeldingVervoer(newmail As Outlook.MailItem, oInspector As Outlook.Inspecto
     
     
     If larryLength >= 2 Then
-        '' Plak derde zin in dat
+        '' Plak derde zin in dat en voeg een enkele spatie toe aan einde, dit om goed naar maanden en dagen te kunnen zoeken straks
         dat = LCase(Trim(larry(2))) & " "
         
         '' datums met komma scheiden kan als je de punt gebruikt maar weekdagen worden dan niet toegevoegd
-        dat = Replace(dat, ".", ",")
+        ''dat = Replace(dat, ".", ",")
         
         '' We zoeken straks zelf de dag op bij de datum dus hier strippen we alle dagaanduidingen
         dat = verwijderWeekdagen(dat)
@@ -769,8 +772,9 @@ Sub AfmeldingVervoer(newmail As Outlook.MailItem, oInspector As Outlook.Inspecto
                         myHTMLText = Replace(myHTMLText, "[per]", blauw(dat))
                         aanOfAfmelding = "Betermelding"
                     Else
-                        If (InStr(dat, " en ")) Then
+                        If (InStr(dat, " en ")) Or (InStr(dat, ",")) Then
                             Dim datt() As String
+                            dat = Replace(dat, ",", " en ")
                             datt = Split(dat, " en ")
                             '' Een getal zonder maand wordt aangezien als dag in huidige maand
                             On Error Resume Next
@@ -806,21 +810,24 @@ Sub AfmeldingVervoer(newmail As Outlook.MailItem, oInspector As Outlook.Inspecto
                                 End If
                             Next i
                         Else
-                        
-                            '' Een getal zonder maand wordt aangezien als dag in huidige maand
-                            On Error Resume Next
-                            If Year(CDate(dat)) = "1900" Or Year(CDate(dat)) = "1899" Then dat = dat & " " & maandNaam(Month(Now()))
-                            '' kijk of datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
-                            If Not jaarGenoemd(dat) _
-                            And CDate(Format(Now, "d-m-yyyy")) > CDate(dat) Then dat = dat & " " & Year(Now) + 1
-                            On Error GoTo 0
-                            dat = week(dat)
+                            If getalGevonden(dat) Then
+                                '' Een getal zonder maand wordt aangezien als dag in huidige maand
+                                On Error Resume Next
+                                If Year(CDate(dat)) = "1900" Or Year(CDate(dat)) = "1899" Then dat = dat & " " & maandNaam(Month(Now()))
+                                '' kijk of datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
+                                If Not jaarGenoemd(dat) _
+                                And CDate(Format(Now, "d-m-yyyy")) > CDate(dat) Then dat = dat & " " & Year(Now) + 1
+                                On Error GoTo 0
+                                dat = week(dat)
+                                dat = Replace(dat, " " & Year(Now) - 1, "")
+                                dat = Replace(dat, " " & Year(Now), "")
+                                dat = Replace(dat, " " & Year(Now) + 1, "")
+                            End If
                         End If
                         
                         myHTMLText = myHTMLText & opDatum
                         myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
                         myHTMLText = Replace(myHTMLText, "[opDatum]", blauw(dat))
-                        dat = RemoveHTML(dat)
                     End If
                 End If
             End If
@@ -840,6 +847,9 @@ Sub AfmeldingVervoer(newmail As Outlook.MailItem, oInspector As Outlook.Inspecto
     clientvolnaam = Replace(clientvolnaam, "genoemde ", "Genoemde ")
     clientvolnaam = Replace(clientvolnaam, "onderstaande ", "Onderstaande ")
     
+    '' nu dat opmaken voor gebruik in onderwerpveld dus HTML eraf halen
+    dat = RemoveHTML(dat)
+    
     '' We korten de maand- en weeknamen weer af voor in het subject
     dat = maandenVerkleind(dat)
     dat = wekenVerkleind(dat)
@@ -850,12 +860,15 @@ Sub AfmeldingVervoer(newmail As Outlook.MailItem, oInspector As Outlook.Inspecto
     
     
     
-    door = vbYes
+    
 
     ''
     '' Om te controleren of er een komma-gescheiden subject is getypt kijken we hier naar de clientvolnaam
     '' Een lege clientvolnaam betekent dat er helemaal geen komma's zijn gebruikt in het subject
     ''
+    
+    door = vbYes
+    
     If clientvolnaam = "" Then
     
         If tel > 0 Then
