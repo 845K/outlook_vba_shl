@@ -2,6 +2,7 @@ Attribute VB_Name = "Module1"
 Global tel As Integer
 Public Const mijnFontSize As String = "10pt"
 Public Const mijnFontFamily As String = "verdana"
+Public Const stopTEXT As String = "Dit hulpmiddel werkt alleen goed als er geen andere mailtjes geopened zijn." & vbNewLine & vbNewLine & "Sluit eerst andere open mail windows en probeer het nog eens."
 Public Const doelenLijst As String = _
 "apeldoorn,bedum,druten,ermelo,julianadorp,monster,noorderbrug,noordwijk,regio zuid,wekerom,zeeland"
 
@@ -24,6 +25,454 @@ Function grijpEigenInitialen() As String
     Next i
  
 End Function
+
+
+Sub AfmeldingVervoer(newmail As Outlook.MailItem, oInspector As Outlook.Inspector, onderwerp As String)
+    
+    '' init
+    Dim myHTMLText     As String
+    Dim deAanhef       As String
+    Dim vanTot         As String
+    Dim opDatum        As String
+    Dim heenTerug      As String
+    Dim ziekGemeld     As String
+    Dim beterGemeld    As String
+    Dim nogVragen      As String
+    Dim mySubject      As String
+    Dim newSubject     As String
+    Dim aanOfAfmelding As String
+    Dim larry()        As String
+    Dim larryLength    As Integer
+    Dim doel           As String
+    Dim doelen()       As String
+    Dim clientvolnaam  As String
+    Dim dat            As String
+    Dim heenOfterug    As String
+    Dim dl             As Variant
+    Dim melder         As String
+    Dim perVanaf       As String
+    Dim door           As Integer
+
+
+''newmail = GetCurrentItem()
+''onderwerp = newmail.Subject
+Debug.Print "tel = " & tel & "  mailID = " & newmail.CreationTime & "  AfmeldingVervoer()1  newmail.Subject = " & newmail.Subject
+
+
+If newmail.CreationTime <> "1-1-4501" Then
+        Debug.Print "tel = " & tel & "  AfmeldingVervoer  newmail.CreationTime <> 1-1-4501 "
+        Debug.Print " *** END ALL"
+        MsgBox stopTEXT, vbCritical, "*** Foutje gevonden ***"
+        End
+End If
+
+     
+    ''''
+    '''' tekst declaraties
+    ''''
+    deAanhef = "Beste [naamMelder],"
+    '' vanTot triggert als 't/m' wordt gezien in datums
+    vanTot = "Het vervoer (heen en retour) van  [naamClient]  is van  [vanDatum]  tot en met  [totDatum]  geannuleerd."
+    '' opDatum triggert als er geen 't/m' of ' en ' in datum gezien wordt
+    opDatum = "Het vervoer (heen en retour) van  [naamClient]  is op  [opDatum]  geannuleerd."
+    '' heenTerug triggert wanneer er een extra komma met heenrit of terugrit gezien wordt
+    heenTerug = "De [heenTerug]  van  [naamClient]  is voor  [opDatum]  geannuleerd."
+    '' ziekGemeld triggert als er 'ziek' wordt gezien in datum
+    ziekGemeld = "Het vervoer (heen en retour) van  [naamClient]  is [per] afgemeld tot nader order."
+    '' beterGemeld triggert als er 'beter' wordt gezien in datum
+    beterGemeld = "Het vervoer (heen en retour) van  [naamClient]  is [per] weer aangemeld."
+    nogVragen = "Mocht u nog vragen hebben, neem dan gerust contact met ons op."
+    
+    
+    '' *******************************************
+    '' ** Subject veld uitpluizen en mooi maken **
+    '' *******************************************
+    
+    dl = "leeg"
+        
+    '' Splits onderwerp string door slash / gescheiden en stop in array genaamd larry
+    '' De RE: mag er ook af
+    onderwerp = Replace(onderwerp, "RE: ", "")
+    onderwerp = Replace(onderwerp, " t/m ", " tm ")
+    larry() = Split(onderwerp, "/")
+    larryLength = UBound(larry) - LBound(larry)
+     
+    
+    '' Als onderwerp leeg is krijgen we errors dus afbreken
+    If Trim(onderwerp) = "" Or Trim(onderwerp) = "RE:" Then Exit Sub
+     
+    '' Plak eerste sectie voor de komma in doel
+    doel = Trim(LCase(larry(0)))
+    
+    '' Kijk of perceelnaam geheel of gedeeltelijk ingevuld is
+    If doel = "nw" Then doel = "noordwijk"
+    If doel = "nb" Then doel = "noorderbrug"
+    If doel = "z" Then doel = "zeeland"
+    If doel = "zuid" Then doel = "regio zuid"
+    doelen = Split(doelenLijst, ",")
+    If (UBound(Filter(doelen, doel)) > -1) Then
+        dl = Filter(doelen, doel)
+        doel = dl(0)
+    End If
+    doel = mooi(doel)
+    
+    
+    If larryLength >= 1 Then
+        '' Plak tweede woord in clientnaam
+        clientvolnaam = mooi(Trim(larry(1)))
+        
+        '' Deze woorden hoeven niet met hoofdletter
+        Dim verkleinLijst() As Variant
+        verkleinLijst = Array(" En ", " Van ", " De ", " Der ", " Den ", " Op ", " Te ", "Begeleider", "Begeleiding", "Personen", "Genoemde", "Onderstaande", "Plus ")
+        For Each woord In verkleinLijst
+            clientvolnaam = Replace(clientvolnaam, woord, LCase(woord))
+        Next
+        
+        '' Om ook een lijstje namen met komma te kunnen scheiden gebruiken we gewoon de punt
+        clientvolnaam = Replace(clientvolnaam, ".", ",")
+    End If
+    
+    
+    If larryLength >= 2 Then
+        '' Plak derde zin in dat en voeg een enkele spatie toe aan einde, dit om goed naar maanden en dagen te kunnen zoeken straks
+        dat = LCase(Trim(larry(2))) & " "
+        
+        '' datums met komma scheiden kan als je de punt gebruikt maar weekdagen worden dan niet toegevoegd
+        ''dat = Replace(dat, ".", ",")  uitgezet omdat nu slash gebruikt wordt ipv komma
+        
+        '' We zoeken straks zelf de dag op bij de datum dus hier strippen we alle dagaanduidingen
+        dat = verwijderWeekdagen(dat)
+        
+        '' Alvast voor de bodytekst afgekorte datums voluit schrijven
+        dat = maandenVoluit(dat)
+        
+        '' ziek- en betermelding opvangen met korte notatie z en b
+        If dat = "z " Then dat = "ziek"
+        If dat = "b " Then dat = "beter"
+ 
+        '' Trim
+        dat = Trim(dat)
+
+    End If
+    
+    
+    '' Plak eventuele vierde sectie in heenOfterug
+    If larryLength >= 3 Then
+        heenOfterug = Trim(LCase(larry(3)))
+        If heenOfterug = "heen" _
+        Or heenOfterug = "h" Then heenOfterug = "heenrit"
+        If heenOfterug = "terug" _
+        Or heenOfterug = "t" _
+        Or heenOfterug = "retour" _
+        Or heenOfterug = "r" Then heenOfterug = "terugrit"
+    End If
+    
+
+
+    '' Melder pakken voor aanhef
+    melder = grijpMelder(newmail)
+   
+    
+    '' *********************************************
+    '' ** Body text kiezen en variabelen invullen **
+    '' *********************************************
+    aanOfAfmelding = "Afmelding"
+    myHTMLText = deAanhef & "<BR><BR><BR>"
+    ''myHTMLText = Replace(myHTMLText, "[naamMelder]", blauw(melder))
+    myHTMLText = Replace(myHTMLText, "[naamMelder]", melder)
+    
+    '' Als we niet genoeg argumenten krijgen dan alle drie de tekstopties klaarzetten om door gebruiker zelf te editten
+    If larryLength <= 1 Then
+        
+        myHTMLText = myHTMLText & vanTot & "<BR><BR>"
+        myHTMLText = myHTMLText & opDatum & "<BR><BR>"
+        myHTMLText = myHTMLText & heenTerug & "<BR>"
+        
+        If larryLength = 1 Then myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
+        
+        myHTMLText = Replace(myHTMLText, "[naamClient]", blauw("naamClient"))
+        myHTMLText = Replace(myHTMLText, "[vanDatum]", blauw("vanDatum"))
+        myHTMLText = Replace(myHTMLText, "[totDatum]", blauw("totDatum"))
+        myHTMLText = Replace(myHTMLText, "[opDatum]", blauw("opDatum"))
+        myHTMLText = Replace(myHTMLText, "[heenTerug]", blauw("heenOfTerug"))
+        
+        
+        
+    Else
+        '' We hebben minimaal 3 argumenten
+        
+        '' Maak gebruik van vandaag, morgen en overmorgen mogelijk
+        dat = Replace(dat, "vandaag", Day(Now()) & " " & maandNaam(Month(Now())))
+        dat = Replace(dat, "overmorgen", Day(Now() + 2) & " " & maandNaam(Month(Now() + 2)))
+        dat = Replace(dat, "morgen", Day(Now() + 1) & " " & maandNaam(Month(Now() + 1)))
+        
+        If (heenOfterug = "heenrit" Or heenOfterug = "terugrit") Then
+            '' Een getal zonder maand wordt aangezien als dag in huidige maand
+            On Error Resume Next
+            If Year(CDate(dat)) = "1900" Or Year(CDate(dat)) = "1899" Then dat = dat & " " & maandNaam(Month(Now()))
+            '' kijk of datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
+            If Not jaarGenoemd(dat) _
+            And CDate(Format(Now, "d-m-yyyy")) > CDate(dat) Then dat = dat & " " & Year(Now) + 1
+            On Error GoTo 0
+            dat = week(dat)
+            dat = Trim(Replace(dat, " " & Year(Now) + 1, ""))
+            myHTMLText = myHTMLText & heenTerug
+            myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
+            myHTMLText = Replace(myHTMLText, "[heenTerug]", blauw(heenOfterug))
+            myHTMLText = Replace(myHTMLText, "[opDatum]", blauw(dat))
+        Else
+            dat = Replace(dat, " tm ", " t/m ")
+            dat = Replace(dat, " tot en met ", " t/m ")
+            dat = Replace(dat, " t.e.m. ", " t/m ")
+            dat = Replace(dat, " t.e.m ", " t/m ")
+            dat = Replace(dat, " tem ", " t/m ")
+            If (InStr(dat, "t/m")) Then
+                Dim dats() As String
+                dats = Split(dat, "t/m")
+                        
+                '' Een getal zonder maand wordt aangezien als dag in huidige maand
+                On Error Resume Next
+                If Year(CDate(dats(0))) = "1900" Or Year(CDate(dats(0))) = "1899" Then dats(0) = dats(0) & " " & maandNaam(Month(Now()))
+                If Year(CDate(dats(1))) = "1900" Or Year(CDate(dats(1))) = "1899" Then dats(1) = dats(1) & " " & maandNaam(Month(Now()))
+                '' kijk of eerste datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
+                If Not jaarGenoemd(dats(0)) _
+                And CDate(Format(Now, "d-m-yyyy")) > CDate(dats(0)) Then dats(0) = dats(0) & " " & Year(Now) + 1
+                '' kijk of tweede datum voor de eerste ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
+                If Not jaarGenoemd(dats(1)) _
+                And CDate(dats(0)) > CDate(dats(1)) Then dats(1) = dats(1) & " " & Year(Now) + 1
+                On Error GoTo 0
+                
+                '' Nu de weekdag erbij zoeken
+                dats(0) = week(Trim(dats(0)))
+                dats(1) = week(Trim(dats(1)))
+                
+                '' eventuele jaartal mag er weer af
+                dats(0) = Replace(dats(0), " " & Year(Now) - 1, "")
+                dats(1) = Replace(dats(1), " " & Year(Now) - 1, "")
+                dats(0) = Replace(dats(0), " " & Year(Now), "")
+                dats(1) = Replace(dats(1), " " & Year(Now), "")
+                dats(0) = Replace(dats(0), " " & Year(Now) + 1, "")
+                dats(1) = Replace(dats(1), " " & Year(Now) + 1, "")
+                
+                dat = dats(0) & " t/m " & dats(1)
+
+                myHTMLText = myHTMLText & vanTot
+                myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
+                myHTMLText = Replace(myHTMLText, "[vanDatum]", blauw(dats(0)))
+                myHTMLText = Replace(myHTMLText, "[totDatum]", blauw(dats(1)))
+            Else
+                If Mid(dat, 1, 4) = "ziek" Then
+                    dat = Trim(Replace(dat, "ziek", ""))
+                    If Len(Trim(dat)) > 0 Then
+                        perVanaf = ""
+                        If InStr(dat, "per ") Then perVanaf = "per "
+                        dat = Replace(dat, perVanaf, "")
+                        If InStr(dat, "vanaf ") Then perVanaf = "vanaf "
+                        dat = Replace(dat, perVanaf, "")
+                        '' Een getal zonder maand wordt aangezien als dag in huidige maand
+                        On Error Resume Next
+                        If Year(CDate(dat)) = "1900" Or Year(CDate(dat)) = "1899" Then dat = dat & " " & maandNaam(Month(Now()))
+                        '' kijk of datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
+                        If Not jaarGenoemd(dat) _
+                        And CDate(Format(Now, "d-m-yyyy")) > CDate(dat) Then dat = dat & " " & Year(Now) + 1
+                        On Error GoTo 0
+                        dat = week(dat)
+                        dat = Trim(Replace(dat, " " & Year(Now) + 1, ""))
+                        dat = perVanaf & dat
+                    End If
+                    myHTMLText = myHTMLText & ziekGemeld
+                    myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
+                    myHTMLText = Replace(myHTMLText, "[per]", blauw(dat))
+                    aanOfAfmelding = "Ziekmelding"
+                Else
+                    If Mid(dat, 1, 5) = "beter" Then
+                        dat = Trim(Replace(dat, "beter", ""))
+                        If Len(Trim(dat)) > 0 Then
+                            perVanaf = ""
+                            If InStr(dat, "per ") Then perVanaf = "per "
+                            dat = Replace(dat, perVanaf, "")
+                            If InStr(dat, "vanaf ") Then perVanaf = "vanaf "
+                            dat = Replace(dat, perVanaf, "")
+                            '' Een getal zonder maand wordt aangezien als dag in huidige maand
+                            On Error Resume Next
+                            If Year(CDate(dat)) = "1900" Or Year(CDate(dat)) = "1899" Then dat = dat & " " & maandNaam(Month(Now()))
+                            '' kijk of datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
+                            If Not jaarGenoemd(dat) _
+                            And CDate(Format(Now, "d-m-yyyy")) > CDate(dat) Then dat = dat & " " & Year(Now) + 1
+                            On Error GoTo 0
+                            dat = week(dat)
+                            dat = Trim(Replace(dat, " " & Year(Now) + 1, ""))
+                            dat = perVanaf & dat
+                        End If
+                        
+                        myHTMLText = myHTMLText & beterGemeld
+                        myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
+                        myHTMLText = Replace(myHTMLText, "[per]", blauw(dat))
+                        aanOfAfmelding = "Betermelding"
+                    Else
+                        If (InStr(dat, " en ")) Or (InStr(dat, ",")) Then
+                            Dim datt() As String
+                            dat = Replace(dat, ",", " en ")
+                            datt = Split(dat, " en ")
+                            '' Een getal zonder maand wordt aangezien als dag in huidige maand
+                            On Error Resume Next
+                            For i = 0 To UBound(datt)
+                                If Year(CDate(datt(i))) = "1900" Or Year(CDate(datt(i))) = "1899" Then datt(i) = datt(i) & " " & maandNaam(Month(Now()))
+                            Next i
+                            '' kijk of eerste datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
+                            If Not jaarGenoemd(datt(0)) _
+                            And CDate(Format(Now, "d-m-yyyy")) > CDate(datt(0)) Then datt(0) = datt(0) & " " & Year(Now) + 1
+                            '' kijk of tweede datum voor de eerste ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
+                            For i = 1 To UBound(datt)
+                                If Not jaarGenoemd(datt(i)) _
+                                And CDate(datt(i - 1)) > CDate(datt(i)) Then datt(i) = datt(i) & " " & Year(Now) + 1
+                            Next i
+                            On Error GoTo 0
+                            
+                            '' Nu de weekdag erbij zoeken
+                            '' eventuele jaartal mag er weer af
+                            For i = 0 To UBound(datt)
+                                datt(i) = week(Trim(datt(i)))
+                                datt(i) = Replace(datt(i), " " & Year(Now) - 1, "")
+                                datt(i) = Replace(datt(i), " " & Year(Now), "")
+                                datt(i) = Replace(datt(i), " " & Year(Now) + 1, "")
+                            Next i
+                            
+                            '' Lijstje datums netjes klaarmaken
+                            dat = datt(0)
+                            For i = 1 To UBound(datt)
+                                If i = UBound(datt) Then
+                                    dat = dat & zwart(" en ") & datt(i)
+                                Else
+                                    dat = dat & zwart(", ") & datt(i)
+                                End If
+                            Next i
+                        Else
+                            If getalGevonden(dat) Then
+                                '' Een getal zonder maand wordt aangezien als dag in huidige maand
+                                On Error Resume Next
+                                If Year(CDate(dat)) = "1900" Or Year(CDate(dat)) = "1899" Then dat = dat & " " & maandNaam(Month(Now()))
+                                '' kijk of datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
+                                If Not jaarGenoemd(dat) _
+                                And CDate(Format(Now, "d-m-yyyy")) > CDate(dat) Then dat = dat & " " & Year(Now) + 1
+                                On Error GoTo 0
+                                dat = week(dat)
+                                dat = Replace(dat, " " & Year(Now) - 1, "")
+                                dat = Replace(dat, " " & Year(Now), "")
+                                dat = Replace(dat, " " & Year(Now) + 1, "")
+                            End If
+                        End If
+                        
+                        myHTMLText = myHTMLText & opDatum
+                        myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
+                        myHTMLText = Replace(myHTMLText, "[opDatum]", blauw(dat))
+                    End If
+                End If
+            End If
+        End If
+    End If
+    
+    myHTMLText = myHTMLText & "<BR><BR>" & nogVragen ''& "<BR>"
+    myHTMLText = "<span style=" & Chr(34) & "font-family:" & mijnFontFamily & ";font-size:" & mijnFontSize & Chr(34) & ">" & myHTMLText & "</span>"
+    
+    
+    ''''
+    '''' Body is klaar, nu het onderwerpveld vorm geven
+    ''''
+    
+   
+    '' Als we een groep namen kregen dan deze woorden met hoofdletters weer terugzetten in het subject omdat dat mooier staat
+    clientvolnaam = Replace(clientvolnaam, "genoemde ", "Genoemde ")
+    clientvolnaam = Replace(clientvolnaam, "onderstaande ", "Onderstaande ")
+    
+    '' nu dat opmaken voor gebruik in onderwerpveld dus HTML eraf halen
+    dat = RemoveHTML(dat)
+    '' Er kruipt soms een Enter aan het eind waardoor heenrit of terugrit niet wordt vermeld
+    dat = Replace(dat, Chr(13), "")
+    
+    '' We korten de maand- en weeknamen weer af voor in het subject
+    dat = maandenVerkleind(dat)
+    dat = wekenVerkleind(dat)
+    
+    '' Gegevens verwerkt, nieuw onderwerp kan opgemaakt worden
+    mySubject = newmail.Subject
+    newSubject = doel & " - " & clientvolnaam & " - " & aanOfAfmelding & " " & dat & " " & heenOfterug
+    
+    
+
+        Debug.Print "tel = " & tel & "  mailID = " & newmail.CreationTime & "  AfmeldingVervoer()2  newmail.Subject = " & newmail.Subject
+    
+
+    ''
+    '' Om te controleren of er een komma-gescheiden subject is getypt kijken we hier naar de clientvolnaam
+    '' Een lege clientvolnaam betekent dat er helemaal geen komma's zijn gebruikt in het subject
+    ''
+    
+    door = vbYes
+    
+    If clientvolnaam = "" Then
+    
+        If tel > 0 Then
+            door = MsgBox("Onderwerpveld als volgt opmaken:" & vbNewLine & "Regio / Clientnaam ( / Datum afmelding ( / Heenrit/terugrit ))" & _
+            vbNewLine & vbNewLine & "Doorgaan met de standaardzinnen?", vbQuestion + vbYesNo, _
+            "Geen gegevens gevonden in onderwerpveld!")
+            If door = vbYes Then newSubject = mySubject '' Subject mag zometeen blijven staan zoals hij was
+        Else
+            '' Omdat het goed mogelijk is dat er nog geen Enter is gegeven in het subjectveld doen we het eerst even zelf
+            SendKeys "{Enter}", True
+            '' Nu gaan we deze routine nog 1 keer runnen dus houden we een global teller bij
+            tel = tel + 1
+            Call InsertText
+            '' Verder kunnen we deze instantie opruimen en afsluiten
+            Set newmail = Nothing
+            Set oInspector = Nothing
+            Exit Sub
+        End If
+        
+    End If
+    
+    '' Als op Cancel wordt gedrukt dan doen we helemaal niks meer
+    If door = vbNo Then
+        tel = 0
+        Set newmail = Nothing
+        Set oInspector = Nothing
+        Exit Sub
+    End If
+    
+            
+    If door = vbYes Then
+    
+        '' Geef onderwerpveld nieuwe subject
+        newmail.Subject = newSubject
+        Debug.Print "tel = " & tel & "  mailID = " & newmail.CreationTime & "  AfmeldingVervoer()3  newmail.Subject = " & newmail.Subject
+        
+    
+        '' Check op welke manier de reply is opengezet en probeer de nieuwe body text erin te proppen
+        plakTextInBody myHTMLText, newmail, oInspector
+    
+        '' Corrigeer To en CC velden en verwijder onszelf
+        corrigeerToCC newmail
+       
+        '' Wij zijn nu eenmaal feilloos dus we verzenden ook maar meteen de mail
+        '' newMail.Send
+    End If
+
+        
+    '' Reset global teller
+    tel = 0
+
+    '' Klaar
+    Set newmail = Nothing
+    Set oInspector = Nothing
+
+
+    '' Alvast stempeltje klaarzetten
+    ''Call clipboardStempel
+        
+    
+End Sub
+
+
 
 Sub clipboardStempel()
     ''''
@@ -77,7 +526,7 @@ End Sub
 Sub besteMelder()
     ''''
     '''' Stop bovenin body de aanhef 'Beste melder,'
-    '''' Boolean switch om geen blauwe meldernaam neer te zetten
+    '''' Boolean switch om geen blauwe meldernaam neer te zetten true = blauw  false = zwart
     ''''
 
     Call zetBesteMelder(False)
@@ -100,11 +549,11 @@ Sub aanhefEnFixCC()
     '''' Ook eigen email verwijderen uit 'To' veld
     ''''
     '''' Stop bovenin body de aanhef 'Beste melder,'
-    '''' Boolean switch om geen blauwe meldernaam neer te zetten
+    '''' Boolean switch om geen blauwe meldernaam neer te zetten true = blauw  false = zwart
     ''''
 
     fixToCC
-    besteMelder
+    Call zetBesteMelder(False)
     '' quick and dirty cursor plaatsen om meteen te typen
     SendKeys "{DOWN}", True
     SendKeys "{Enter}", True
@@ -388,6 +837,10 @@ Sub InsertText()
     End If
     
     Call AfmeldingVervoer(newmail, oInspector, newmail.Subject)
+    
+    Set newmail = Nothing
+    Set oInspector = Nothing
+    
 
 End Sub
 
@@ -409,17 +862,19 @@ Sub test()
         Call AfmeldingVervoer(newmail, oInspector, ond)
     Next
     
+    Set newmail = Nothing
+    Set oInspector = Nothing
+    
 End Sub
 
 Function jaarGenoemd(dat As String) As Boolean
     ''''
     '''' True wanneer vorig jaar, dit jaar of volgend jaar genoemd wordt in string
     ''''
-    jaarGenoemd = False
     
-    If InStr(dat, Year(Now()) - 1) _
+    jaarGenoemd = (InStr(dat, Year(Now()) - 1) _
     Or InStr(dat, Year(Now())) _
-    Or InStr(dat, Year(Now()) + 1) Then jaarGenoemd = True
+    Or InStr(dat, Year(Now()) + 1))
     
 End Function
 
@@ -474,17 +929,11 @@ Function maandenVerkleind(dat As String) As String
     '''' Schrijft maandnamen verkleind als ze voluit geschreven aangetroffen worden
     ''''
     
-    dat = Replace(dat, "januari", "jan")
-    dat = Replace(dat, "februari", "feb")
-    dat = Replace(dat, "maart", "mrt")
-    dat = Replace(dat, "april", "apr")
-    ''dat = Replace(dat, "juni", "jun")
-    ''dat = Replace(dat, "juli", "jul")
-    dat = Replace(dat, "augustus", "aug")
-    dat = Replace(dat, "september", "sep")
-    dat = Replace(dat, "oktober", "okt")
-    dat = Replace(dat, "november", "nov")
-    dat = Replace(dat, "december", "dec")
+    For Each maandWoord In Array("januari", "februari", "april", "juni", "juli", "augustus", "september", "oktober", "november", "december")
+        dat = Replace(dat, maandWoord, Mid(maandWoord, 1, 3))
+    Next
+    
+    dat = Replace(dat, "maart", "mrt")  '' omdat anders maart maa wordt en dan later mis kan gaan als maandag wordt gevonden via maa en dan mrtndag werd
     
     maandenVerkleind = dat
     
@@ -496,438 +945,15 @@ Function wekenVerkleind(dat As String) As String
     '''' Schrijft weekdagen in verkleinde vorm als ze voluit geschreven aangetroffen worden
     ''''
         
-    dat = Replace(dat, "maandag", "ma")
-    dat = Replace(dat, "dinsdag", "di")
-    dat = Replace(dat, "woensdag", "wo")
-    dat = Replace(dat, "donderdag", "do")
-    dat = Replace(dat, "vrijdag", "vr")
-    dat = Replace(dat, "zaterdag", "za")
-    dat = Replace(dat, "zondag", "zo")
+    For Each weekdag In Array("maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag")
+        dat = Replace(dat, weekdag, Mid(weekdag, 1, 2))
+    Next
     
     wekenVerkleind = dat
     
 End Function
 
-Sub AfmeldingVervoer(newmail As Outlook.MailItem, oInspector As Outlook.Inspector, onderwerp As String)
-    
-    '' init
-    Dim myHTMLText     As String
-    Dim deAanhef       As String
-    Dim vanTot         As String
-    Dim opDatum        As String
-    Dim heenTerug      As String
-    Dim ziekGemeld     As String
-    Dim beterGemeld    As String
-    Dim nogVragen      As String
-    Dim mySubject      As String
-    Dim newSubject     As String
-    Dim aanOfAfmelding As String
-    Dim larry()        As String
-    Dim larryLength    As Integer
-    Dim doel           As String
-    Dim doelen()       As String
-    Dim clientvolnaam  As String
-    Dim dat            As String
-    Dim heenOfterug    As String
-    Dim dl             As Variant
-    Dim melder         As String
-    Dim perVanaf       As String
-    Dim door           As Integer
 
-     
-    ''''
-    '''' tekst declaraties
-    ''''
-    deAanhef = "Beste [naamMelder],"
-    '' vanTot triggert als 't/m' wordt gezien in datums
-    vanTot = "Het vervoer (heen en retour) van  [naamClient]  is van  [vanDatum]  tot en met  [totDatum]  geannuleerd."
-    '' opDatum triggert als er geen 't/m' of ' en ' in datum gezien wordt
-    opDatum = "Het vervoer (heen en retour) van  [naamClient]  is op  [opDatum]  geannuleerd."
-    '' heenTerug triggert wanneer er een extra komma met heenrit of terugrit gezien wordt
-    heenTerug = "De [heenTerug]  van  [naamClient]  is voor  [opDatum]  geannuleerd."
-    '' ziekGemeld triggert als er 'ziek' wordt gezien in datum
-    ziekGemeld = "Het vervoer (heen en retour) van  [naamClient]  is [per] afgemeld tot nader order."
-    '' beterGemeld triggert als er 'beter' wordt gezien in datum
-    beterGemeld = "Het vervoer (heen en retour) van  [naamClient]  is [per] weer aangemeld."
-    nogVragen = "Mocht u nog vragen hebben, neem dan gerust contact met ons op."
-    
-    
-    '' *******************************************
-    '' ** Subject veld uitpluizen en mooi maken **
-    '' *******************************************
-    
-    dl = "leeg"
-        
-    '' Splits onderwerp string door slash / gescheiden en stop in array genaamd larry
-    '' De RE: mag er ook af
-    onderwerp = Replace(onderwerp, "RE: ", "")
-    onderwerp = Replace(onderwerp, " t/m ", " tm ")
-    larry() = Split(onderwerp, "/")
-    larryLength = UBound(larry) - LBound(larry)
-     
-    
-    '' Als onderwerp leeg is krijgen we errors dus afbreken
-    If Trim(onderwerp) = "" Or Trim(onderwerp) = "RE:" Then Exit Sub
-     
-    '' Plak eerste sectie voor de komma in doel
-    doel = Trim(LCase(larry(0)))
-    
-    '' Kijk of perceelnaam geheel of gedeeltelijk ingevuld is
-    If doel = "nw" Then doel = "noordwijk"
-    If doel = "nb" Then doel = "noorderbrug"
-    If doel = "z" Then doel = "zeeland"
-    If doel = "zuid" Then doel = "regio zuid"
-    doelen = Split(doelenLijst, ",")
-    If (UBound(Filter(doelen, doel)) > -1) Then
-        dl = Filter(doelen, doel)
-        doel = dl(0)
-    End If
-    doel = mooi(doel)
-    
-    
-    If larryLength >= 1 Then
-        '' Plak tweede woord in clientnaam
-        clientvolnaam = mooi(Trim(larry(1)))
-        
-        '' Deze woorden hoeven niet met hoofdletter
-        Dim verkleinLijst() As Variant
-        verkleinLijst = Array(" En ", " Van ", " De ", " Der ", " Den ", " Op ", " Te ", "Begeleider", "Begeleiding", "Personen", "Genoemde", "Onderstaande", "Plus ")
-        For Each woord In verkleinLijst
-            clientvolnaam = Replace(clientvolnaam, woord, LCase(woord))
-        Next
-        
-        '' Om ook een lijstje namen met komma te kunnen scheiden gebruiken we gewoon de punt
-        clientvolnaam = Replace(clientvolnaam, ".", ",")
-    End If
-    
-    
-    If larryLength >= 2 Then
-        '' Plak derde zin in dat en voeg een enkele spatie toe aan einde, dit om goed naar maanden en dagen te kunnen zoeken straks
-        dat = LCase(Trim(larry(2))) & " "
-        
-        '' datums met komma scheiden kan als je de punt gebruikt maar weekdagen worden dan niet toegevoegd
-        ''dat = Replace(dat, ".", ",")
-        
-        '' We zoeken straks zelf de dag op bij de datum dus hier strippen we alle dagaanduidingen
-        dat = verwijderWeekdagen(dat)
-        
-        '' Alvast voor de bodytekst afgekorte datums voluit schrijven
-        dat = maandenVoluit(dat)
-        
-        '' ziek- en betermelding opvangen met korte notatie z en b
-        If dat = "z " Then dat = "ziek"
-        If dat = "b " Then dat = "beter"
- 
-        '' Trim
-        dat = Trim(dat)
-
-    End If
-    
-    
-    '' Plak eventuele vierde sectie in heenOfterug
-    If larryLength >= 3 Then
-        heenOfterug = Trim(LCase(larry(3)))
-        If heenOfterug = "heen" _
-        Or heenOfterug = "h" Then heenOfterug = "heenrit"
-        If heenOfterug = "terug" _
-        Or heenOfterug = "t" _
-        Or heenOfterug = "retour" _
-        Or heenOfterug = "r" Then heenOfterug = "terugrit"
-    End If
-    
-
-
-    '' Melder pakken voor aanhef
-    melder = grijpMelder(newmail)
-   
-    
-    '' *********************************************
-    '' ** Body text kiezen en variabelen invullen **
-    '' *********************************************
-    aanOfAfmelding = "Afmelding"
-    myHTMLText = deAanhef & "<BR><BR><BR>"
-    ''myHTMLText = Replace(myHTMLText, "[naamMelder]", blauw(melder))
-    myHTMLText = Replace(myHTMLText, "[naamMelder]", melder)
-    
-    '' Als we niet genoeg argumenten krijgen dan alle drie de tekstopties klaarzetten om door gebruiker zelf te editten
-    If larryLength <= 1 Then
-        
-        myHTMLText = myHTMLText & vanTot & "<BR><BR>"
-        myHTMLText = myHTMLText & opDatum & "<BR><BR>"
-        myHTMLText = myHTMLText & heenTerug & "<BR>"
-        
-        If larryLength = 1 Then myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
-        
-        myHTMLText = Replace(myHTMLText, "[naamClient]", blauw("naamClient"))
-        myHTMLText = Replace(myHTMLText, "[vanDatum]", blauw("vanDatum"))
-        myHTMLText = Replace(myHTMLText, "[totDatum]", blauw("totDatum"))
-        myHTMLText = Replace(myHTMLText, "[opDatum]", blauw("opDatum"))
-        myHTMLText = Replace(myHTMLText, "[heenTerug]", blauw("heenOfTerug"))
-        
-        
-        
-    Else
-        '' We hebben minimaal 3 argumenten
-        If (heenOfterug = "heenrit" Or heenOfterug = "terugrit") Then
-            '' Een getal zonder maand wordt aangezien als dag in huidige maand
-            On Error Resume Next
-            If Year(CDate(dat)) = "1900" Or Year(CDate(dat)) = "1899" Then dat = dat & " " & maandNaam(Month(Now()))
-            '' kijk of datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
-            If Not jaarGenoemd(dat) _
-            And CDate(Format(Now, "d-m-yyyy")) > CDate(dat) Then dat = dat & " " & Year(Now) + 1
-            On Error GoTo 0
-            dat = week(dat)
-            dat = Trim(Replace(dat, " " & Year(Now) + 1, ""))
-            myHTMLText = myHTMLText & heenTerug
-            myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
-            myHTMLText = Replace(myHTMLText, "[heenTerug]", blauw(heenOfterug))
-            myHTMLText = Replace(myHTMLText, "[opDatum]", blauw(dat))
-        Else
-            dat = Replace(dat, " tm ", " t/m ")
-            dat = Replace(dat, " tot en met ", " t/m ")
-            dat = Replace(dat, " t.e.m. ", " t/m ")
-            dat = Replace(dat, " t.e.m ", " t/m ")
-            dat = Replace(dat, " tem ", " t/m ")
-            If (InStr(dat, "t/m")) Then
-                Dim dats() As String
-                dats = Split(dat, "t/m")
-                        
-                '' Een getal zonder maand wordt aangezien als dag in huidige maand
-                On Error Resume Next
-                If Year(CDate(dats(0))) = "1900" Or Year(CDate(dats(0))) = "1899" Then dats(0) = dats(0) & " " & maandNaam(Month(Now()))
-                If Year(CDate(dats(1))) = "1900" Or Year(CDate(dats(1))) = "1899" Then dats(1) = dats(1) & " " & maandNaam(Month(Now()))
-                '' kijk of eerste datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
-                If Not jaarGenoemd(dats(0)) _
-                And CDate(Format(Now, "d-m-yyyy")) > CDate(dats(0)) Then dats(0) = dats(0) & " " & Year(Now) + 1
-                '' kijk of tweede datum voor de eerste ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
-                If Not jaarGenoemd(dats(1)) _
-                And CDate(dats(0)) > CDate(dats(1)) Then dats(1) = dats(1) & " " & Year(Now) + 1
-                On Error GoTo 0
-                
-                '' Nu de weekdag erbij zoeken
-                dats(0) = week(Trim(dats(0)))
-                dats(1) = week(Trim(dats(1)))
-                
-                '' eventuele jaartal mag er weer af
-                dats(0) = Replace(dats(0), " " & Year(Now) - 1, "")
-                dats(1) = Replace(dats(1), " " & Year(Now) - 1, "")
-                dats(0) = Replace(dats(0), " " & Year(Now), "")
-                dats(1) = Replace(dats(1), " " & Year(Now), "")
-                dats(0) = Replace(dats(0), " " & Year(Now) + 1, "")
-                dats(1) = Replace(dats(1), " " & Year(Now) + 1, "")
-                
-                dat = dats(0) & " t/m " & dats(1)
-
-                myHTMLText = myHTMLText & vanTot
-                myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
-                myHTMLText = Replace(myHTMLText, "[vanDatum]", blauw(dats(0)))
-                myHTMLText = Replace(myHTMLText, "[totDatum]", blauw(dats(1)))
-            Else
-                If Mid(dat, 1, 4) = "ziek" Then
-                    dat = Trim(Replace(dat, "ziek", ""))
-                    If Len(Trim(dat)) > 0 Then
-                        perVanaf = ""
-                        If InStr(dat, "per ") Then perVanaf = "per "
-                        dat = Replace(dat, perVanaf, "")
-                        If InStr(dat, "vanaf ") Then perVanaf = "vanaf "
-                        dat = Replace(dat, perVanaf, "")
-                        '' Een getal zonder maand wordt aangezien als dag in huidige maand
-                        On Error Resume Next
-                        If Year(CDate(dat)) = "1900" Or Year(CDate(dat)) = "1899" Then dat = dat & " " & maandNaam(Month(Now()))
-                        '' kijk of datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
-                        If Not jaarGenoemd(dat) _
-                        And CDate(Format(Now, "d-m-yyyy")) > CDate(dat) Then dat = dat & " " & Year(Now) + 1
-                        On Error GoTo 0
-                        dat = week(dat)
-                        dat = Trim(Replace(dat, " " & Year(Now) + 1, ""))
-                        dat = perVanaf & dat
-                    End If
-                    myHTMLText = myHTMLText & ziekGemeld
-                    myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
-                    myHTMLText = Replace(myHTMLText, "[per]", blauw(dat))
-                    aanOfAfmelding = "Ziekmelding"
-                Else
-                    If Mid(dat, 1, 5) = "beter" Then
-                        dat = Trim(Replace(dat, "beter", ""))
-                        If Len(Trim(dat)) > 0 Then
-                            perVanaf = ""
-                            If InStr(dat, "per ") Then perVanaf = "per "
-                            dat = Replace(dat, perVanaf, "")
-                            If InStr(dat, "vanaf ") Then perVanaf = "vanaf "
-                            dat = Replace(dat, perVanaf, "")
-                            '' Een getal zonder maand wordt aangezien als dag in huidige maand
-                            On Error Resume Next
-                            If Year(CDate(dat)) = "1900" Or Year(CDate(dat)) = "1899" Then dat = dat & " " & maandNaam(Month(Now()))
-                            '' kijk of datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
-                            If Not jaarGenoemd(dat) _
-                            And CDate(Format(Now, "d-m-yyyy")) > CDate(dat) Then dat = dat & " " & Year(Now) + 1
-                            On Error GoTo 0
-                            dat = week(dat)
-                            dat = Trim(Replace(dat, " " & Year(Now) + 1, ""))
-                            dat = perVanaf & dat
-                        End If
-                        
-                        myHTMLText = myHTMLText & beterGemeld
-                        myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
-                        myHTMLText = Replace(myHTMLText, "[per]", blauw(dat))
-                        aanOfAfmelding = "Betermelding"
-                    Else
-                        If (InStr(dat, " en ")) Or (InStr(dat, ",")) Then
-                            Dim datt() As String
-                            dat = Replace(dat, ",", " en ")
-                            datt = Split(dat, " en ")
-                            '' Een getal zonder maand wordt aangezien als dag in huidige maand
-                            On Error Resume Next
-                            For i = 0 To UBound(datt)
-                                If Year(CDate(datt(i))) = "1900" Or Year(CDate(datt(i))) = "1899" Then datt(i) = datt(i) & " " & maandNaam(Month(Now()))
-                            Next i
-                            '' kijk of eerste datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
-                            If Not jaarGenoemd(datt(0)) _
-                            And CDate(Format(Now, "d-m-yyyy")) > CDate(datt(0)) Then datt(0) = datt(0) & " " & Year(Now) + 1
-                            '' kijk of tweede datum voor de eerste ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
-                            For i = 1 To UBound(datt)
-                                If Not jaarGenoemd(datt(i)) _
-                                And CDate(datt(i - 1)) > CDate(datt(i)) Then datt(i) = datt(i) & " " & Year(Now) + 1
-                            Next i
-                            On Error GoTo 0
-                            
-                            '' Nu de weekdag erbij zoeken
-                            '' eventuele jaartal mag er weer af
-                            For i = 0 To UBound(datt)
-                                datt(i) = week(Trim(datt(i)))
-                                datt(i) = Replace(datt(i), " " & Year(Now) - 1, "")
-                                datt(i) = Replace(datt(i), " " & Year(Now), "")
-                                datt(i) = Replace(datt(i), " " & Year(Now) + 1, "")
-                            Next i
-                            
-                            '' Lijstje datums netjes klaarmaken
-                            dat = datt(0)
-                            For i = 1 To UBound(datt)
-                                If i = UBound(datt) Then
-                                    dat = dat & zwart(" en ") & datt(i)
-                                Else
-                                    dat = dat & zwart(", ") & datt(i)
-                                End If
-                            Next i
-                        Else
-                            If getalGevonden(dat) Then
-                                '' Een getal zonder maand wordt aangezien als dag in huidige maand
-                                On Error Resume Next
-                                If Year(CDate(dat)) = "1900" Or Year(CDate(dat)) = "1899" Then dat = dat & " " & maandNaam(Month(Now()))
-                                '' kijk of datum voor vandaag ligt dan wordt aangenomen dat volgend jaar bedoeld wordt, tenzij er al een jaartal wordt meegegeven
-                                If Not jaarGenoemd(dat) _
-                                And CDate(Format(Now, "d-m-yyyy")) > CDate(dat) Then dat = dat & " " & Year(Now) + 1
-                                On Error GoTo 0
-                                dat = week(dat)
-                                dat = Replace(dat, " " & Year(Now) - 1, "")
-                                dat = Replace(dat, " " & Year(Now), "")
-                                dat = Replace(dat, " " & Year(Now) + 1, "")
-                            End If
-                        End If
-                        
-                        myHTMLText = myHTMLText & opDatum
-                        myHTMLText = Replace(myHTMLText, "[naamClient]", blauw(clientvolnaam))
-                        myHTMLText = Replace(myHTMLText, "[opDatum]", blauw(dat))
-                    End If
-                End If
-            End If
-        End If
-    End If
-    
-    myHTMLText = myHTMLText & "<BR><BR>" & nogVragen ''& "<BR>"
-    myHTMLText = "<span style=" & Chr(34) & "font-family:" & mijnFontFamily & ";font-size:" & mijnFontSize & Chr(34) & ">" & myHTMLText & "</span>"
-    
-    
-    ''''
-    '''' Body is klaar, nu het onderwerpveld vorm geven
-    ''''
-    
-   
-    '' Als we een groep namen kregen dan deze woorden met hoofdletters weer terugzetten in het subject omdat dat mooier staat
-    clientvolnaam = Replace(clientvolnaam, "genoemde ", "Genoemde ")
-    clientvolnaam = Replace(clientvolnaam, "onderstaande ", "Onderstaande ")
-    
-    '' nu dat opmaken voor gebruik in onderwerpveld dus HTML eraf halen
-    dat = RemoveHTML(dat)
-    
-    '' We korten de maand- en weeknamen weer af voor in het subject
-    dat = maandenVerkleind(dat)
-    dat = wekenVerkleind(dat)
-    
-    '' Gegevens verwerkt, nieuw onderwerp kan opgemaakt worden
-    mySubject = newmail.Subject
-    newSubject = doel & " - " & clientvolnaam & " - " & aanOfAfmelding & " " & dat & " " & heenOfterug
-    
-    
-    
-    
-
-    ''
-    '' Om te controleren of er een komma-gescheiden subject is getypt kijken we hier naar de clientvolnaam
-    '' Een lege clientvolnaam betekent dat er helemaal geen komma's zijn gebruikt in het subject
-    ''
-    
-    door = vbYes
-    
-    If clientvolnaam = "" Then
-    
-        If tel > 0 Then
-            door = MsgBox("Onderwerpveld als volgt opmaken:" & vbNewLine & "Perceel , Clientnaam ( , Datum afmelding ( , Heenrit/terugrit ))" & _
-            vbNewLine & vbNewLine & "Doorgaan met de standaardzinnen?", vbQuestion + vbYesNo, _
-            "Geen gegevens gevonden in onderwerpveld!")
-            If door = vbYes Then newSubject = mySubject '' Subject mag zometeen blijven staan zoals hij was
-        Else
-            '' Omdat het goed mogelijk is dat er nog geen Enter is gegeven in het subjectveld doen we het eerst even zelf
-            SendKeys "{Enter}", True
-            '' Nu gaan we deze routine nog 1 keer runnen dus houden we een global teller bij
-            tel = tel + 1
-            Call InsertText
-            '' Verder kunnen we deze instantie opruimen en afsluiten
-            Set newmail = Nothing
-            Set oInspector = Nothing
-            Exit Sub
-        End If
-        
-    End If
-    
-    '' Als op Cancel wordt gedrukt dan doen we helemaal niks meer
-    If door = vbNo Then
-        tel = 0
-        Set newmail = Nothing
-        Set oInspector = Nothing
-        Exit Sub
-    End If
-    
-            
-    If door = vbYes Then
-    
-        '' Geef onderwerpveld nieuwe subject
-        newmail.Subject = newSubject
-    
-        '' Check op welke manier de reply is opengezet en probeer de nieuwe body text erin te proppen
-        plakTextInBody myHTMLText, newmail, oInspector
-    
-        '' Corrigeer To en CC velden en verwijder onszelf
-        corrigeerToCC newmail
-       
-        '' Wij zijn nu eenmaal feilloos dus we verzenden ook maar meteen de mail
-        '' newMail.Send
-    End If
-
-        
-    '' Reset global teller
-    tel = 0
-
-    '' Klaar
-    Set newmail = Nothing
-    Set oInspector = Nothing
-
-
-    '' Alvast stempeltje klaarzetten
-    ''Call clipboardStempel
-        
-    
-End Sub
 
 
 
@@ -1093,9 +1119,31 @@ Dim tos() As String
 
 End Sub
 
+
+
+Sub TESTplakTextInBody(myHTMLText As String, newmail As MailItem, oInspector As Inspector)
+    '' Check op welke manier de reply is opengezet en probeer de nieuwe body text erin te proppen
+    ''If oInspector Is Nothing Then
+        Debug.Print "tel = " & tel & "  plakTextInBody() newmail.BodyFormat = " & newmail.BodyFormat
+
+        Select Case newmail.BodyFormat
+            Case olFormatPlain, olFormatRichText, olFormatUnspecified
+                newmail.Body = RemoveHTML(myHTMLText) & newmail.Body
+            Case olFormatHTML
+                newmail.HTMLBody = myHTMLText & newmail.HTMLBody
+        End Select
+
+    ''Else
+    ''    Debug.Print "tel = " & tel & "Target is niet inline"
+    ''End If
+End Sub
+
+
+
 Sub plakTextInBody(myHTMLText As String, newmail As MailItem, oInspector As Inspector)
     '' Check op welke manier de reply is opengezet en probeer de nieuwe body text erin te proppen
     If oInspector Is Nothing Then
+        Debug.Print "plakTextInBody 1  oInspector Is Nothing"
 
         Select Case newmail.BodyFormat
             Case olFormatPlain, olFormatRichText, olFormatUnspecified
@@ -1106,7 +1154,14 @@ Sub plakTextInBody(myHTMLText As String, newmail As MailItem, oInspector As Insp
 
     Else
         If oInspector.IsWordMail Then
-        MsgBox "Dit is experimenteel. Beter is gewoon niet een los window openen om deze macro te gebruiken"
+        
+        
+        Debug.Print "plakTextInBody 2  oInspector.IsWordMail"
+        Debug.Print " *** END ALL"
+        MsgBox stopTEXT, vbCritical, "Foutje gevonden"
+        End
+        
+        
             ' Hurray. We can use the rich Word object model, with access
             ' the caret and everything.
             Dim oDoc As Object, oWrdApp As Object, oSelection As Object
@@ -1119,7 +1174,7 @@ Sub plakTextInBody(myHTMLText As String, newmail As MailItem, oInspector As Insp
             Set oWrdApp = Nothing
             Set oDoc = Nothing
         Else
-        
+        Debug.Print "plakTextInBody 3   not oInspector.IsWordMail"
         MsgBox "Dit is experimenteel. Beter is gewoon niet een los window openen om deze macro te gebruiken"
             ' No object model to work with. Must manipulate raw text.
             Select Case newmail.BodyFormat
@@ -1134,23 +1189,27 @@ End Sub
 
 Function grijpMelder(newmail As MailItem) As String
 
-    Dim txt As String
-    Dim onderwerpPos1 As String
-    Dim onderwerpPos2 As String
-    Dim groetLen As Integer
-    Dim groetenPos As Integer
-    Dim gokNaam As String
-    Dim melder As String
-    Dim melders() As String
+    Dim txt            As String
+    Dim onderwerpPos1  As String
+    Dim onderwerpPos2  As String
+    Dim groetLen       As Integer
+    Dim groetenPos     As Integer
+    Dim gokNaam        As String
+    Dim melder         As String
+    Dim melders()      As String
     Dim melderVoornaam As Integer
     Dim senderHadGetal As Boolean
+    Dim defaultAanhef  As String
+    
+    '' Als we geen goede naam vinden dan deze aanhef gebruiken
+    defaultAanhef = "melder"
     
     '' eerst alles resolven
     newmail.Recipients.ResolveAll
     '' alle ontvangers uitsplitsen
     melders = Split(newmail.To, ";")
-    '' eerste ontvanger selecteren uit rij
-    melder = melders(0)
+    '' controle of er iets in het To veld staat dan eerste ontvanger selecteren uit rij
+    If newmail.To = "" Then melder = "123" Else melder = melders(0)
     '' als er ergens een getal voorkomt is het waarschijnlijk een adres en niet een persoonsnaam
     senderHadGetal = getalGevonden(melder)
     '' splitsen op komma om voornaam te proberen te pakken
@@ -1171,13 +1230,13 @@ Function grijpMelder(newmail As MailItem) As String
     grijpMelder = melder
      
     '' Hier een aantal ontdekte woorden die als voornaam worden aangezien maar niet kloppen
-    For Each miswoord In Array("Groep", "De", "Het", "'t")
-        If grijpMelder = miswoord Then melderVoornaam = 0
+    For Each miswoord In Array("Groep", "De", "Het", "T", "'T", "Middelburg")
+        If LCase(grijpMelder) = LCase(miswoord) Then melderVoornaam = 0
     Next
      
     '' Kijk of in gevonden meldernaam een getal zit of dat er geen sprake was van een komma-gescheiden meldernaam
     If (senderHadGetal Or melderVoornaam = 0) Then
-        grijpMelder = "melder"
+        grijpMelder = defaultAanhef
         txt = newmail.Body
         onderwerpPos1 = InStr(1, txt, "Onderwerp: ")
         onderwerpPos2 = InStr(onderwerpPos1 + 10, txt, "Onderwerp: ")
@@ -1185,18 +1244,17 @@ Function grijpMelder(newmail As MailItem) As String
         
         txt = LCase(Mid(txt, onderwerpPos1 + 11, onderwerpPos2 - onderwerpPos1 + 1))
              
-        For Each groet In Array("voorbaat dank,", "melder:", "mvg,", "mvgr", "mvrgr", "groeten van", "groetjes van", "groetjes,", "groet:", "groeten:", "groetjes:", "groet van", "groet;", "groeten;", "groetjes;", "groetjes", "groeten", "groet", "dank!", "gr.", "mvg", "m.v.g.", "thanks,", "gr ", "gr" & Chr(13), " gr ", "groet,", "groeten,")
+        For Each groet In Array("voorbaat dank,", "melder:", "mvg,", "mvgr", "mvrgr", "groeten van", "groetjes van", "gr.van", "groetjes,", "groet:", "groeten:", "groetjes:", "groet van", "groet;", "groeten;", "groetjes;", "groetjes", "groeten", "groet", "dank!", "gr.", "mvg", "m.v.g.", "thanks,", "gr ", "gr" & Chr(13), " gr ", "groet,", "groeten,")
             groetLen = Len(groet)
             groetenPos = InStr(txt, groet)
             If groetenPos > 0 Then
                 gokNaam = Mid(txt, groetenPos + groetLen, 25)
-                
+                '' Hier wordt wat gekunsteld om eventuele gekke handtekeningen uit te filteren zodat alsnog de naam naar voren komt, werkt in sommige gevallen prima
                 gokNaam = Replace(gokNaam, Chr(13), " ")
                 gokNaam = Replace(gokNaam, Chr(10), " ")
                 gokNaam = Replace(gokNaam, Chr(12), " ")
                 gokNaam = smartTrim(gokNaam)
                 gokNaam = Trim(gokNaam)
-                
                 grijpMelder = mooi(gokNaam)
                 Exit For
             End If
@@ -1204,7 +1262,10 @@ Function grijpMelder(newmail As MailItem) As String
           
     End If
     
-    If grijpMelder = "De" Then grijpMelder = "melder"
+    '' Aantal misgrijpingen verbeteren
+    For Each miswoord In Array("Team", "De", "Het", "Namens", "Jac", "DB", "Leer")
+        If LCase(grijpMelder) = LCase(miswoord) Then grijpMelder = defaultAanhef
+    Next
     
 End Function
 
@@ -1246,12 +1307,18 @@ Function GetCurrentItem() As Object
     Set objApp = Application
 
     On Error Resume Next
+    Debug.Print "tel = " & tel & "  GetCurrentItem() typename = " & TypeName(objApp.ActiveWindow)
+    
     Select Case TypeName(objApp.ActiveWindow)
         Case "Explorer"
             ' Set GetCurrentItem = objApp.ActiveExplorer.Selection.Item(1)
             Set GetCurrentItem = objApp.ActiveExplorer.ActiveInlineResponse
+            Debug.Print "tel = " & tel & "  GetCurrentItem()  = objApp.ActiveExplorer.ActiveInlineResponse"
+            
         Case "Inspector"
             Set GetCurrentItem = objApp.ActiveInspector.CurrentItem
+            Debug.Print "tel = " & tel & "  GetCurrentItem()  = objApp.ActiveInspector.CurrentItem"
+            
     End Select
 
     Set objApp = Nothing
