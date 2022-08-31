@@ -487,6 +487,8 @@ Sub clipboardStempel()
     Set oMail = GetCurrentItem()
     melder = grijpMelder(oMail)
     verzonden = grijpVerzonden(oMail)
+    
+    If melder = "melder" Then melder = ""
         
     Clipboard (grijpEigenInitialen & " iov " & melder & " mail van " & Format(verzonden, "d mmmm"))
     
@@ -917,6 +919,23 @@ Function maandenVoluit(dat As String) As String
     dat = Replace(dat, "oct ", "oktober ")
     dat = Replace(dat, "nov ", "november ")
     dat = Replace(dat, "dec ", "december ")
+    
+    
+    '' Ook opsommingen behandelen
+    dat = Replace(dat, "jan,", "januari,")
+    dat = Replace(dat, "feb,", "februari,")
+    dat = Replace(dat, "mar,", "maart,")
+    dat = Replace(dat, "mrt,", "maart,")
+    dat = Replace(dat, "apr,", "april,")
+    dat = Replace(dat, "jun,", "juni,")
+    dat = Replace(dat, "jul,", "juli,")
+    dat = Replace(dat, "aug,", "augustus,")
+    dat = Replace(dat, "sept,", "sep,")
+    dat = Replace(dat, "sep,", "september,")
+    dat = Replace(dat, "okt,", "oktober,")
+    dat = Replace(dat, "oct,", "oktober,")
+    dat = Replace(dat, "nov,", "november,")
+    dat = Replace(dat, "dec,", "december,")
     
     maandenVoluit = dat
     
@@ -1353,7 +1372,7 @@ Function gevondenAantal(txt As String, vind As String) As Integer
         plek = InStr(plek + Len(vind), txt, vind)
     Wend
     
-    '' Vond deze geniale oplossing op stackoverflow
+    '' Vond deze geniale oplossing op stackoverflow maar geeft bugs in mijn scripts, nog niet onderzocht waarom
     ''gevondenAantal = Len(txt) - Len(Replace(txt, vind, ""))
 
 End Function
